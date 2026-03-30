@@ -78,33 +78,13 @@ class VADStreamer:
                     voice_buffer = voice_buffer[bytes_per_buffer:]
 
 
-# --- How to use it in your Benchmark Architecture ---
+def segment_audio(path, mode=3, chunk_duration_ms=30, buffer_ms=500):
+    streamer = VADStreamer(mode=mode, chunk_duration_ms=chunk_duration_ms)
+    pcm_data, sample_rate = normalize_audio_for_webrtc(path)
 
-if __name__ == "__main__":
-    # Initialize the streamer.
-    streamer = VADStreamer(mode=3, chunk_duration_ms=30)
-
-    # Path to an ASVspoof or in-the-wild benchmark file
-    test_audio_path = "./data/LA_D_1000265.flac"
-
-    try:
-        # 1. Normalize the audio and extract the raw PCM data first
-        pcm_data, sample_rate = normalize_audio_for_webrtc(test_audio_path)
-        print(f"Streaming {test_audio_path} at {sample_rate}Hz...")
-
-        # 2. Pass the raw data into the streamer to get your chunks
-        for voiced_chunk in streamer.stream_voiced_audio(
-            pcm_data, sample_rate, buffer_ms=500
-        ):
-
-            # --- BENCHMARKING HARNESS ---
-            # start_time = time.time()
-            # prediction_score = sota_model.predict(voiced_chunk)
-            # latency = time.time() - start_time
-
-            print(
-                f"[Streamer] Sent 500ms chunk of speech ({len(voiced_chunk)} bytes). Validating latency..."
-            )
-
-    except Exception as e:
-        print(f"Streamer Error: {e}")
+    return [
+        chunk
+        for chunk in streamer.stream_voiced_audio(
+            pcm_data, sample_rate, buffer_ms=buffer_ms
+        )
+    ]
