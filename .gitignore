@@ -2,3 +2,5 @@ test
 clearml.conf
 context
 docs
+.claude
+CLAUDE.md

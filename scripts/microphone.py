@@ -7,8 +7,6 @@ CHANNELS = 1
 RATE = 16000
 CHUNK_DURATION_MS = 30
 BUFFER_TARGET_MS = 500
-
-# Calculate exact buffer sizes based on math we discussed earlier
 CHUNK_SIZE_SAMPLES = int(RATE * (CHUNK_DURATION_MS / 1000.0))  # 480 samples per 30ms
 BYTES_PER_TARGET_BUFFER = int(RATE * (BUFFER_TARGET_MS / 1000.0) * 2)
 
