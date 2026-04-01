@@ -41,6 +41,38 @@ class VADStreamer:
         self.vad = webrtcvad.Vad(mode)
         self.chunk_duration_ms = chunk_duration_ms
 
+    def stream_voiced_audio(self, pcm_data, sample_rate, buffer_ms=300, hop_ms=100):
+        """
+        Simulates a live stream. Yields continuous blocks of voiced audio.
+        """
+        frames = self.frame_generator(pcm_data, sample_rate)
+
+        # How many bytes equal the buffer size we want to send to the model?
+        bytes_per_buffer = int(sample_rate * (buffer_ms / 1000.0) * 2)
+        # How many bytes to slide the window forward (e.g., step forward 100ms)
+        hop_bytes = int(sample_rate * (hop_ms / 1000.0) * 2)
+        voice_buffer = bytearray()
+
+        # Send frames through the VAD and collect voiced segments into the voice_buffer
+        # Segment 1: [0ms - 500ms] -> Send to model
+        # Segment 2: [100ms - 600ms] -> Send to model
+        # Segment 3: [200ms - 700ms] -> Send to model
+        for frame in frames:
+            is_speech = self.vad.is_speech(frame, sample_rate)
+
+            if is_speech:
+                voice_buffer.extend(frame)
+
+                # If we have collected enough continuous speech, yield it!
+                while len(voice_buffer) >= bytes_per_buffer:
+
+                    # Convert bytearray back to standard immutable bytes for downstream safety
+                    chunk_to_send = bytes(voice_buffer[:bytes_per_buffer])
+                    yield chunk_to_send
+
+                    # Slide the window forward by the hop size.
+                    voice_buffer = voice_buffer[hop_bytes:]
+
     def frame_generator(self, pcm_data, sample_rate):
         """Generates raw audio frames of the exact duration required by WebRTC."""
         offset = 0
@@ -50,32 +82,6 @@ class VADStreamer:
         while offset + chunk_size <= len(pcm_data):
             yield pcm_data[offset : offset + chunk_size]
             offset += chunk_size
-
-    def stream_voiced_audio(self, pcm_data, sample_rate, buffer_ms=300):
-        """
-        Simulates a live stream. Yields continuous blocks of voiced audio.
-        """
-        frames = self.frame_generator(pcm_data, sample_rate)
-
-        # How many bytes equal the buffer size we want to send to the model?
-        bytes_per_buffer = int(sample_rate * (buffer_ms / 1000.0) * 2)
-        voice_buffer = bytearray()
-
-        for frame in frames:
-            is_speech = self.vad.is_speech(frame, sample_rate)
-
-            if is_speech:
-                voice_buffer.extend(frame)
-
-                # If we have collected enough continuous speech, yield it!
-                if len(voice_buffer) >= bytes_per_buffer:
-
-                    # Convert bytearray back to standard immutable bytes for downstream safety
-                    chunk_to_send = bytes(voice_buffer[:bytes_per_buffer])
-                    yield chunk_to_send
-
-                    # Keep any remainder
-                    voice_buffer = voice_buffer[bytes_per_buffer:]
 
 
 def segment_audio(path, mode=3, chunk_duration_ms=30, buffer_ms=500):

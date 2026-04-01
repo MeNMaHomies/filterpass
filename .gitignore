@@ -4,3 +4,6 @@ context
 docs
 .claude
 CLAUDE.md
+data
+ASVspoof2021_LA_eval
+.vscode
