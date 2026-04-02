@@ -1,9 +1,10 @@
 test
 clearml.conf
 context
-docs
 .claude
 CLAUDE.md
 data
 ASVspoof2021_LA_eval
 .vscode
+__pycache__
+.pt
