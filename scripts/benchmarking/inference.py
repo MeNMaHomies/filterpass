@@ -12,7 +12,7 @@ import torch
 from tqdm import tqdm
 
 from .config import CHUNK_DURATION_S
-from .model_base import BenchmarkModel
+from .base.model_base import BenchmarkModel
 
 
 def run_inference(

@@ -14,7 +14,7 @@ import torch
 from huggingface_hub import hf_hub_download
 from safetensors.torch import load_file
 
-from ..model_base import BenchmarkModel
+from ..base.model_base import BenchmarkModel
 
 
 _HF_REPO = "AustinXiao/XLSR-Mamba-LA"
@@ -25,7 +25,12 @@ _DEFAULT_NUM_ENCODERS = 12
 
 
 class XLSRMamba(BenchmarkModel):
-    def __init__(self, repo_path: str, emb_size: int = _DEFAULT_EMB_SIZE, num_encoders: int = _DEFAULT_NUM_ENCODERS):
+    def __init__(
+        self,
+        repo_path: str,
+        emb_size: int = _DEFAULT_EMB_SIZE,
+        num_encoders: int = _DEFAULT_NUM_ENCODERS,
+    ):
         self._repo_path = repo_path
         self._emb_size = emb_size
         self._num_encoders = num_encoders
@@ -46,7 +51,9 @@ class XLSRMamba(BenchmarkModel):
         weights_path = hf_hub_download(repo_id=_HF_REPO, filename=_HF_FILE)
         print(f"Weights at: {weights_path}")
 
-        model_args = argparse.Namespace(emb_size=self._emb_size, num_encoders=self._num_encoders)
+        model_args = argparse.Namespace(
+            emb_size=self._emb_size, num_encoders=self._num_encoders
+        )
         model = Model(model_args, device)
         model.load_state_dict(load_file(weights_path))
         model.to(device)
@@ -57,7 +64,7 @@ class XLSRMamba(BenchmarkModel):
 
     def predict(self, chunks: torch.Tensor) -> torch.Tensor:
         out = self._model(chunks)  # (N, 2)
-        return out[:, 1]           # bonafide logit
+        return out[:, 1]  # bonafide logit
 
     def parameter_count(self) -> int:
         if self._model is None:

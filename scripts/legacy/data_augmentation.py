@@ -12,20 +12,21 @@ Dependencies:
     pip install soundfile numpy scipy pyroomacoustics audiomentations
 """
 
-import os
 import argparse
+import os
 import random
-from pathlib import Path
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
-import soundfile as sf
 import scipy.signal as sps
+import soundfile as sf
 
 # ── optional heavy deps ──────────────────────────────────────────────────────
 try:
     import pyroomacoustics as pra
+
     HAS_PRA = True
 except ImportError:
     HAS_PRA = False
@@ -33,24 +34,32 @@ except ImportError:
 
 try:
     from audiomentations import (
-        Compose, AddGaussianNoise, AddBackgroundNoise,
-        TimeStretch, PitchShift, Gain,
+        AddBackgroundNoise,
+        AddGaussianNoise,
+        Compose,
+        Gain,
+        PitchShift,
+        TimeStretch,
     )
+
     HAS_AUDIOMENTATIONS = True
 except ImportError:
     HAS_AUDIOMENTATIONS = False
-    print("[warn] audiomentations not installed – some augmentations use numpy fallbacks.")
+    print(
+        "[warn] audiomentations not installed – some augmentations use numpy fallbacks."
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Config
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class AugmentationConfig:
     # ── noise ──────────────────────────────────────────────────────────────
     add_white_noise: bool = True
-    white_noise_snr_db: tuple[float, float] = (10.0, 30.0)   # (min, max) SNR in dB
+    white_noise_snr_db: tuple[float, float] = (10.0, 30.0)  # (min, max) SNR in dB
 
     add_pink_noise: bool = True
     pink_noise_snr_db: tuple[float, float] = (10.0, 25.0)
@@ -58,46 +67,47 @@ class AugmentationConfig:
     add_brown_noise: bool = False
     brown_noise_snr_db: tuple[float, float] = (10.0, 20.0)
 
-    background_noise_dir: Optional[str] = None               # folder of .wav/.flac noise files
+    background_noise_dir: Optional[str] = None  # folder of .wav/.flac noise files
     background_noise_snr_db: tuple[float, float] = (5.0, 20.0)
 
     # ── channel / device ───────────────────────────────────────────────────
-    simulate_rir: bool = True                                 # room impulse response via pyroomacoustics
-    room_dim_range: tuple[float, float] = (3.0, 10.0)        # room side length in metres
-    rt60_range: tuple[float, float] = (0.2, 0.8)             # reverberation time in seconds
+    simulate_rir: bool = True  # room impulse response via pyroomacoustics
+    room_dim_range: tuple[float, float] = (3.0, 10.0)  # room side length in metres
+    rt60_range: tuple[float, float] = (0.2, 0.8)  # reverberation time in seconds
 
-    apply_bandpass: bool = True                              # telephone / codec bandwidth limit
+    apply_bandpass: bool = True  # telephone / codec bandwidth limit
     bandpass_low_hz: float = 300.0
     bandpass_high_hz: float = 3400.0
 
-    apply_mic_coloration: bool = True                        # mild EQ bump to simulate cheap mic
+    apply_mic_coloration: bool = True  # mild EQ bump to simulate cheap mic
     mic_coloration_gain_db: float = 3.0
     mic_coloration_freq_hz: float = 1500.0
 
-    apply_codec_distortion: bool = True                      # mild soft-clip (mp3/codec artefact feel)
-    codec_clip_threshold: float = 0.85                       # 0–1
+    apply_codec_distortion: bool = True  # mild soft-clip (mp3/codec artefact feel)
+    codec_clip_threshold: float = 0.85  # 0–1
 
     # ── time-domain / packet-loss ──────────────────────────────────────────
     simulate_packet_loss: bool = True
-    packet_loss_rate: float = 0.05                           # fraction of 20-ms packets dropped
-    packet_loss_fill: str = "silence"                        # "silence" | "repeat" | "noise"
+    packet_loss_rate: float = 0.05  # fraction of 20-ms packets dropped
+    packet_loss_fill: str = "silence"  # "silence" | "repeat" | "noise"
 
-    apply_time_stretch: bool = False                         # slow down / speed up
+    apply_time_stretch: bool = False  # slow down / speed up
     time_stretch_range: tuple[float, float] = (0.9, 1.1)
 
     apply_random_gain: bool = True
     gain_db_range: tuple[float, float] = (-6.0, 6.0)
 
     # ── output ─────────────────────────────────────────────────────────────
-    output_subtype: str = "PCM_16"                           # FLAC subtype
+    output_subtype: str = "PCM_16"  # FLAC subtype
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper utilities
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def rms(audio: np.ndarray) -> float:
-    return float(np.sqrt(np.mean(audio ** 2)) + 1e-9)
+    return float(np.sqrt(np.mean(audio**2)) + 1e-9)
 
 
 def mix_at_snr(signal: np.ndarray, noise: np.ndarray, snr_db: float) -> np.ndarray:
@@ -118,6 +128,7 @@ def match_length(noise: np.ndarray, target_len: int) -> np.ndarray:
 # ─────────────────────────────────────────────────────────────────────────────
 # 1.  Noise-based augmentation
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def generate_white_noise(n: int) -> np.ndarray:
     return np.random.randn(n).astype(np.float32)
@@ -161,8 +172,9 @@ def augment_noise(audio: np.ndarray, sr: int, cfg: AugmentationConfig) -> np.nda
         audio = mix_at_snr(audio, generate_brown_noise(n), snr)
 
     if cfg.background_noise_dir:
-        noise_files = list(Path(cfg.background_noise_dir).glob("**/*.flac")) + \
-                      list(Path(cfg.background_noise_dir).glob("**/*.wav"))
+        noise_files = list(Path(cfg.background_noise_dir).glob("**/*.flac")) + list(
+            Path(cfg.background_noise_dir).glob("**/*.wav")
+        )
         if noise_files:
             nf = random.choice(noise_files)
             bg, bg_sr = sf.read(str(nf), dtype="float32", always_2d=False)
@@ -181,6 +193,7 @@ def augment_noise(audio: np.ndarray, sr: int, cfg: AugmentationConfig) -> np.nda
 # ─────────────────────────────────────────────────────────────────────────────
 # 2.  Channel & device simulation
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def simulate_rir(audio: np.ndarray, sr: int, cfg: AugmentationConfig) -> np.ndarray:
     """Simulate a random shoe-box room using pyroomacoustics."""
@@ -215,7 +228,9 @@ def simulate_rir(audio: np.ndarray, sr: int, cfg: AugmentationConfig) -> np.ndar
     return np.clip(out, -1.0, 1.0)
 
 
-def apply_bandpass_filter(audio: np.ndarray, sr: int, cfg: AugmentationConfig) -> np.ndarray:
+def apply_bandpass_filter(
+    audio: np.ndarray, sr: int, cfg: AugmentationConfig
+) -> np.ndarray:
     """Simulate telephone / narrowband codec frequency response."""
     lo = cfg.bandpass_low_hz / (sr / 2.0)
     hi = cfg.bandpass_high_hz / (sr / 2.0)
@@ -225,7 +240,9 @@ def apply_bandpass_filter(audio: np.ndarray, sr: int, cfg: AugmentationConfig) -
     return sps.lfilter(b, a, audio).astype(np.float32)
 
 
-def apply_mic_coloration(audio: np.ndarray, sr: int, cfg: AugmentationConfig) -> np.ndarray:
+def apply_mic_coloration(
+    audio: np.ndarray, sr: int, cfg: AugmentationConfig
+) -> np.ndarray:
     """Boost a mid-frequency band to mimic cheap microphone resonance."""
     freq = cfg.mic_coloration_freq_hz / (sr / 2.0)
     freq = np.clip(freq, 1e-4, 0.9999)
@@ -241,7 +258,8 @@ def apply_codec_distortion(audio: np.ndarray, cfg: AugmentationConfig) -> np.nda
     audio = np.where(
         np.abs(audio) <= thr,
         audio,
-        np.sign(audio) * (thr + (1.0 - thr) * np.tanh((np.abs(audio) - thr) / (1.0 - thr + 1e-9))),
+        np.sign(audio)
+        * (thr + (1.0 - thr) * np.tanh((np.abs(audio) - thr) / (1.0 - thr + 1e-9))),
     )
     return audio.astype(np.float32)
 
@@ -262,7 +280,10 @@ def augment_channel(audio: np.ndarray, sr: int, cfg: AugmentationConfig) -> np.n
 # 3.  Time-domain augmentation (packet loss, time stretch, gain)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def simulate_packet_loss(audio: np.ndarray, sr: int, cfg: AugmentationConfig) -> np.ndarray:
+
+def simulate_packet_loss(
+    audio: np.ndarray, sr: int, cfg: AugmentationConfig
+) -> np.ndarray:
     """
     VoIP-style packet loss: split into 20-ms frames; randomly drop `packet_loss_rate`
     fraction of frames and fill them with silence, the previous frame (repeat), or noise.
@@ -304,7 +325,9 @@ def apply_random_gain_fn(audio: np.ndarray, cfg: AugmentationConfig) -> np.ndarr
     return np.clip(audio * gain_linear, -1.0, 1.0)
 
 
-def augment_time_domain(audio: np.ndarray, sr: int, cfg: AugmentationConfig) -> np.ndarray:
+def augment_time_domain(
+    audio: np.ndarray, sr: int, cfg: AugmentationConfig
+) -> np.ndarray:
     if cfg.simulate_packet_loss:
         audio = simulate_packet_loss(audio, sr, cfg)
     if cfg.apply_time_stretch:
@@ -318,6 +341,7 @@ def augment_time_domain(audio: np.ndarray, sr: int, cfg: AugmentationConfig) -> 
 # ─────────────────────────────────────────────────────────────────────────────
 # Full pipeline
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def augment_file(
     input_path: str,
@@ -378,32 +402,41 @@ def augment_directory(
 # CLI
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="FLAC audio augmentation: noise, RIR, packet-loss simulation."
     )
-    p.add_argument("input",  help="Input .flac file OR directory of .flac files")
+    p.add_argument("input", help="Input .flac file OR directory of .flac files")
     p.add_argument("output", help="Output .flac file OR output directory")
-    p.add_argument("--n-aug", type=int, default=1,
-                   help="Number of augmented copies per file (directory mode only)")
-    p.add_argument("--bg-noise-dir", default=None,
-                   help="Directory of background noise files (.wav / .flac)")
+    p.add_argument(
+        "--n-aug",
+        type=int,
+        default=1,
+        help="Number of augmented copies per file (directory mode only)",
+    )
+    p.add_argument(
+        "--bg-noise-dir",
+        default=None,
+        help="Directory of background noise files (.wav / .flac)",
+    )
 
     # Toggle flags
-    p.add_argument("--no-white-noise",    action="store_true")
-    p.add_argument("--no-pink-noise",     action="store_true")
-    p.add_argument("--add-brown-noise",   action="store_true")
-    p.add_argument("--no-rir",            action="store_true")
-    p.add_argument("--no-bandpass",       action="store_true")
-    p.add_argument("--no-mic-color",      action="store_true")
-    p.add_argument("--no-codec-dist",     action="store_true")
-    p.add_argument("--no-packet-loss",    action="store_true")
-    p.add_argument("--packet-fill",       choices=["silence", "repeat", "noise"],
-                   default="silence")
-    p.add_argument("--packet-loss-rate",  type=float, default=0.05)
-    p.add_argument("--add-time-stretch",  action="store_true")
-    p.add_argument("--no-gain",           action="store_true")
-    p.add_argument("--seed",              type=int, default=None)
+    p.add_argument("--no-white-noise", action="store_true")
+    p.add_argument("--no-pink-noise", action="store_true")
+    p.add_argument("--add-brown-noise", action="store_true")
+    p.add_argument("--no-rir", action="store_true")
+    p.add_argument("--no-bandpass", action="store_true")
+    p.add_argument("--no-mic-color", action="store_true")
+    p.add_argument("--no-codec-dist", action="store_true")
+    p.add_argument("--no-packet-loss", action="store_true")
+    p.add_argument(
+        "--packet-fill", choices=["silence", "repeat", "noise"], default="silence"
+    )
+    p.add_argument("--packet-loss-rate", type=float, default=0.05)
+    p.add_argument("--add-time-stretch", action="store_true")
+    p.add_argument("--no-gain", action="store_true")
+    p.add_argument("--seed", type=int, default=None)
     return p
 
 
@@ -411,19 +444,19 @@ def main() -> None:
     args = build_parser().parse_args()
 
     cfg = AugmentationConfig(
-        add_white_noise       = not args.no_white_noise,
-        add_pink_noise        = not args.no_pink_noise,
-        add_brown_noise       = args.add_brown_noise,
-        background_noise_dir  = args.bg_noise_dir,
-        simulate_rir          = not args.no_rir,
-        apply_bandpass        = not args.no_bandpass,
-        apply_mic_coloration  = not args.no_mic_color,
-        apply_codec_distortion= not args.no_codec_dist,
-        simulate_packet_loss  = not args.no_packet_loss,
-        packet_loss_fill      = args.packet_fill,
-        packet_loss_rate      = args.packet_loss_rate,
-        apply_time_stretch    = args.add_time_stretch,
-        apply_random_gain     = not args.no_gain,
+        add_white_noise=not args.no_white_noise,
+        add_pink_noise=not args.no_pink_noise,
+        add_brown_noise=args.add_brown_noise,
+        background_noise_dir=args.bg_noise_dir,
+        simulate_rir=not args.no_rir,
+        apply_bandpass=not args.no_bandpass,
+        apply_mic_coloration=not args.no_mic_color,
+        apply_codec_distortion=not args.no_codec_dist,
+        simulate_packet_loss=not args.no_packet_loss,
+        packet_loss_fill=args.packet_fill,
+        packet_loss_rate=args.packet_loss_rate,
+        apply_time_stretch=args.add_time_stretch,
+        apply_random_gain=not args.no_gain,
     )
 
     inp = Path(args.input)
@@ -436,6 +469,9 @@ def main() -> None:
     else:
         print(f"[error] '{inp}' is not a .flac file or directory.")
 
+
+if __name__ == "__main__":
+    main()
 
 if __name__ == "__main__":
     main()

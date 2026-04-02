@@ -19,17 +19,17 @@ import sys
 import numpy as np
 import pandas as pd
 
-from ..dataset_base import DatasetAdapter, Trial
+from ..base.dataset_base import DatasetAdapter, Trial
 
 
-_CM_KEY  = os.path.join("CM", "trial_metadata.txt")
+_CM_KEY = os.path.join("CM", "trial_metadata.txt")
 _ASV_KEY = os.path.join("ASV", "trial_metadata.txt")
 _ASV_SCR = os.path.join("ASV", "ASVTorch_Kaldi", "score.txt")
 
-_COL_UTT       = 1
-_COL_LABEL     = 5
+_COL_UTT = 1
+_COL_LABEL = 5
 _COL_CONDITION = 6
-_COL_PHASE     = 7
+_COL_PHASE = 7
 _COL_ASV_SCORE = 2
 
 
@@ -97,12 +97,18 @@ class ASVspoof2021LA(DatasetAdapter):
         asv_key = pd.read_csv(asv_key_file, sep=" ", header=None)
         asv_scr = pd.read_csv(asv_scr_file, sep=" ", header=None)
 
-        phase_mask    = asv_key[_COL_PHASE] == phase
+        phase_mask = asv_key[_COL_PHASE] == phase
         asv_scr_phase = asv_scr[phase_mask]
 
-        tar_asv   = asv_scr_phase[_COL_ASV_SCORE][asv_key[phase_mask][_COL_LABEL] == "target"].values
-        non_asv   = asv_scr_phase[_COL_ASV_SCORE][asv_key[phase_mask][_COL_LABEL] == "nontarget"].values
-        spoof_asv = asv_scr_phase[_COL_ASV_SCORE][asv_key[phase_mask][_COL_LABEL] == "spoof"].values
+        tar_asv = asv_scr_phase[_COL_ASV_SCORE][
+            asv_key[phase_mask][_COL_LABEL] == "target"
+        ].values
+        non_asv = asv_scr_phase[_COL_ASV_SCORE][
+            asv_key[phase_mask][_COL_LABEL] == "nontarget"
+        ].values
+        spoof_asv = asv_scr_phase[_COL_ASV_SCORE][
+            asv_key[phase_mask][_COL_LABEL] == "spoof"
+        ].values
 
         _, asv_threshold = em.compute_eer(tar_asv, non_asv)
         Pfa_asv, Pmiss_asv, _, Pfa_spoof_asv = em.obtain_asv_error_rates(
@@ -110,25 +116,29 @@ class ASVspoof2021LA(DatasetAdapter):
         )
 
         utt_to_label = {t.utt_id: t.label for t in trials}
-        scored_ids   = list(scores.keys())
-        scores_arr   = np.array([scores[u] for u in scored_ids])
-        labels_arr   = np.array([utt_to_label[u] for u in scored_ids])
+        scored_ids = list(scores.keys())
+        scores_arr = np.array([scores[u] for u in scored_ids])
+        labels_arr = np.array([utt_to_label[u] for u in scored_ids])
 
-        bona_scores  = scores_arr[labels_arr == "bonafide"]
+        bona_scores = scores_arr[labels_arr == "bonafide"]
         spoof_scores = scores_arr[labels_arr == "spoof"]
 
         Pspoof = 0.05
         cost_model = {
-            "Pspoof":    Pspoof,
-            "Ptar":      (1 - Pspoof) * 0.99,
-            "Pnon":      (1 - Pspoof) * 0.01,
-            "Cmiss":     1,
-            "Cfa":       10,
+            "Pspoof": Pspoof,
+            "Ptar": (1 - Pspoof) * 0.99,
+            "Pnon": (1 - Pspoof) * 0.01,
+            "Cmiss": 1,
+            "Cfa": 10,
             "Cfa_spoof": 10,
         }
         tDCF_curve, _ = em.compute_tDCF(
-            bona_scores, spoof_scores,
-            Pfa_asv, Pmiss_asv, Pfa_spoof_asv,
-            cost_model, False,
+            bona_scores,
+            spoof_scores,
+            Pfa_asv,
+            Pmiss_asv,
+            Pfa_spoof_asv,
+            cost_model,
+            False,
         )
         return {"min_tDCF": float(np.min(tDCF_curve))}
