@@ -6,7 +6,7 @@ Supports two modes:
   - VAD-filtered chunking (--vad): WebRTC VAD discards silence at the 30ms
     frame level, then the remaining voiced audio is chunked.
 
-Both modes support an optional overlapping sliding window via hop_ms.
+Both modes support an optional overlapping sliding window via overlap_pct.
 """
 
 import os
@@ -93,14 +93,10 @@ def _load_and_chunk(
     """
     utt_id = os.path.splitext(os.path.basename(flac_path))[0]
     try:
-        try:
-            audio, sr = sf.read(flac_path, dtype="float32", always_2d=False)
-        except Exception as sf_err:
-            print(f"[FALLBACK:TORCHAUDIO] {utt_id}: {sf_err}", flush=True)
-            import torchaudio
+        import torchaudio
 
-            waveform, sr = torchaudio.load(flac_path)
-            audio = waveform[0].numpy()
+        waveform, sr = torchaudio.load(flac_path)
+        audio = waveform[0].numpy()
 
         # Force mono
         if audio.ndim > 1:
@@ -142,7 +138,7 @@ class UtteranceDataset(Dataset):
         self,
         flac_paths: list[str],
         use_vad: bool = False,
-        vad_mode: int = 3,
+        vad_mode: int = 2,
         hop_samples: int = CHUNK_SAMPLES,
     ):
         self.paths = flac_paths
@@ -171,10 +167,10 @@ def build_loader(
     flac_paths: list[str],
     num_workers: int,
     use_vad: bool = False,
-    vad_mode: int = 3,
-    hop_ms: int = 500,
+    vad_mode: int = 2,
+    overlap_pct: int = 0,
 ) -> DataLoader:
-    hop_samples = int(TARGET_SR * hop_ms / 1000)
+    hop_samples = max(1, int(CHUNK_SAMPLES * (1 - overlap_pct / 100)))
 
     return DataLoader(
         UtteranceDataset(flac_paths, use_vad, vad_mode, hop_samples),

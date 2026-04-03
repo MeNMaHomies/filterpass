@@ -2,12 +2,29 @@
 Model-agnostic, dataset-agnostic benchmark CLI.
 
 Usage:
+    # Basic run
     python -m scripts.benchmarking \\
         --model   xlsr-mamba \\
         --dataset asvspoof2021-la \\
         --eval_dir  data/ASVspoof2021_LA_eval/flac \\
         --keys_dir  data/keys/LA \\
         --out_dir   results/xlsr-mamba
+
+    # With VAD-filtered chunking (discard silence before inference)
+    python -m scripts.benchmarking \\
+        --model   xlsr-mamba \\
+        --dataset asvspoof2021-la \\
+        --eval_dir  data/ASVspoof2021_LA_eval/flac \\
+        --keys_dir  data/keys/LA \\
+        --use_vad --vad_mode 2
+
+    # With VAD and 80% overlapping sliding window
+    python -m scripts.benchmarking \\
+        --model   xlsr-mamba \\
+        --dataset asvspoof2021-la \\
+        --eval_dir  data/ASVspoof2021_LA_eval/flac \\
+        --keys_dir  data/keys/LA \\
+        --use_vad --overlap 80
 
 Adding a new model:
     1. Implement BenchmarkModel in scripts/benchmarking/models/<name>.py
@@ -26,14 +43,13 @@ import sys
 
 import torch
 
+from . import reporter
 from .audio_loader import build_loader
 from .config import BenchmarkConfig
+from .datasets import REGISTRY as DATASET_REGISTRY
 from .inference import run_inference
 from .metrics import compute_detection_metrics, compute_rtf_stats
 from .models import REGISTRY as MODEL_REGISTRY
-from .datasets import REGISTRY as DATASET_REGISTRY
-from . import reporter
-
 
 FILTERPASS_DIR = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -94,10 +110,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="VAD aggressiveness mode (0 to 3, higher is more aggressive)",
     )
     p.add_argument(
-        "--vad_hop_ms",
+        "--overlap",
         type=int,
-        default=100,
-        help="VAD hop size in milliseconds (how much to slide the window forward after sending to the model)",
+        default=0,
+        choices=range(0, 100),
+        metavar="0-99",
+        help="Sliding window overlap percentage (0 = no overlap, 80 = 80%% overlap)",
     )
 
     return p
@@ -147,7 +165,7 @@ def main() -> None:
         num_workers=args.num_workers,
         vad=args.use_vad,
         vad_mode=args.vad_mode,
-        hop_ms=args.vad_hop_ms,
+        overlap_pct=args.overlap,
     )
 
     # ── Model ─────────────────────────────────────────────────────────────────
@@ -171,7 +189,7 @@ def main() -> None:
     # ── eval_metrics — optional, sourced from model repo after load() sets sys.path ──
     em = None
     try:
-        import eval_metrics as em  # noqa: PLC0415
+        import eval_metrics as em  # type: ignore # noqa: PLC0415
     except ImportError:
         pass  # dataset adapter handles the None case gracefully
 
@@ -189,14 +207,14 @@ def main() -> None:
     )
 
     if cfg.vad:
-        print(f"VAD enabled (mode={cfg.vad_mode}, hop={cfg.hop_ms}ms)")
+        print(f"VAD enabled (mode={cfg.vad_mode}, overlap={cfg.overlap_pct}%)")
 
     loader = build_loader(
         flac_paths,
         cfg.num_workers,
         use_vad=cfg.vad,
         vad_mode=cfg.vad_mode,
-        hop_ms=cfg.hop_ms,
+        overlap_pct=cfg.overlap_pct,
     )
     all_scores, all_rtf, skipped = run_inference(model, loader, device, cfg.batch_size)
 

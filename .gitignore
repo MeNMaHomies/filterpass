@@ -7,4 +7,4 @@ data
 ASVspoof2021_LA_eval
 .vscode
 __pycache__
-.pt
+xlsr2_300m.pt

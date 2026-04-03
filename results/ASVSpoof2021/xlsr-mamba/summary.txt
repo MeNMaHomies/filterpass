@@ -1,0 +1,34 @@
+Model:            XLSR-Mamba (AustinXiao/XLSR-Mamba-LA)
+Dataset:          ASVspoof 2021 LA (phase=eval)
+Scored:           148176 utterances
+Skipped:          0 utterances
+
+--- Model ---
+Parameters:       319,327,542
+VRAM (load):      1.19 GB
+VRAM (peak):      1.51 GB
+
+--- Anti-Spoofing ---
+EER:              6.96%
+min-tDCF:         0.3365
+AUC-ROC:          0.9783
+FAR (@ EER thr):  6.96%
+FRR (@ EER thr):  6.96%
+
+--- Classification (@ EER threshold) ---
+Accuracy:         93.04%
+Precision:        0.5977
+Recall:           0.9304
+F1:               0.7278
+
+--- Per-Condition EER ---
+  notrim: 6.96%
+
+--- Real-Time Performance (no VAD, per 500ms chunk) ---
+RTF mean:         0.0405
+RTF median:       0.0300
+RTF p95:          0.1043
+RTF max:          0.9598
+Latency mean:     20.2 ms
+Latency median:   15.0 ms
+Latency p95:      52.1 ms

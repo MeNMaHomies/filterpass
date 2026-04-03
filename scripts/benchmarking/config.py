@@ -17,5 +17,5 @@ class BenchmarkConfig:
 
     # ── chunking ──────────────────────────────────────────────────────────────
     vad: bool = False  # filter silence via WebRTC VAD before chunking
-    vad_mode: int = 3  # VAD aggressiveness 0-3 (3 = most aggressive)
-    hop_ms: int = 500  # sliding window hop in ms (500 = no overlap, 100 = 80% overlap)
+    vad_mode: int = 2  # VAD aggressiveness 0-3 (3 = most aggressive)
+    overlap_pct: int = 0  # sliding window overlap percentage (0 = no overlap, 80 = 80% overlap)

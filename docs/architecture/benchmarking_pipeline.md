@@ -40,11 +40,21 @@ The inference loop only depends on `BenchmarkModel`. It handles batching across 
 
 Each utterance is loaded, resampled (if needed), and split into fixed 500ms / 8000-sample chunks inside a DataLoader worker process. This runs on CPU in parallel while the GPU is busy with the previous batch. The fallback chain is `soundfile → torchaudio → skip`, so files with unusual encodings do not halt the run.
 
-### 7. `BenchmarkConfig` holds only inference execution state
+### 7. VAD-filtered chunking with overlapping sliding window
 
-Dataset paths (`eval_dir`, `keys_dir`) are constructor arguments to the dataset adapter, not fields on `BenchmarkConfig`. Model architecture args (`emb_size`, `num_encoders`) are constructor arguments to the model adapter. `BenchmarkConfig` only holds parameters that affect how inference is executed: `out_dir`, `phase`, `batch_size`, `num_workers`.
+Audio loading supports two orthogonal options that can be toggled independently:
 
-### 8. `reporter.py` is pure I/O
+- **VAD filtering** (`--use_vad`): WebRTC VAD runs on 30ms frames at 16 kHz. Non-speech frames are discarded before chunking, so the model only sees voiced audio. This mirrors the live-mic pipeline in `scripts/microphone.py`. VAD aggressiveness is configurable via `--vad_mode` (0–3, higher = more aggressive silence removal).
+
+- **Overlapping sliding window** (`--overlap`): Percentage of overlap between consecutive 500ms chunks. The default of 0 produces non-overlapping chunks. A value of 80 gives 80% overlap (hop = 100ms), which is useful for fine-grained score aggregation at the cost of more forward passes per utterance.
+
+Both options are wired through `BenchmarkConfig` → `build_loader()` → `UtteranceDataset` → worker functions, keeping the inference loop and metrics layer unaware of how chunks were produced.
+
+### 8. `BenchmarkConfig` holds only inference execution state
+
+Dataset paths (`eval_dir`, `keys_dir`) are constructor arguments to the dataset adapter, not fields on `BenchmarkConfig`. Model architecture args (`emb_size`, `num_encoders`) are constructor arguments to the model adapter. `BenchmarkConfig` only holds parameters that affect how inference is executed: `out_dir`, `phase`, `batch_size`, `num_workers`, `vad`, `vad_mode`, `overlap_pct`.
+
+### 9. `reporter.py` is pure I/O
 
 The reporter receives fully-computed dicts from `metrics.py` and writes them to disk or stdout. It has no knowledge of how scores were produced, which model was used, or which dataset was evaluated. `dataset_name` and `model_name` are passed as plain strings from the adapters' `.name` properties.
 
@@ -60,8 +70,8 @@ The reporter receives fully-computed dicts from `metrics.py` and writes them to 
 | `models/xlsr_mamba.py` | XLSR-Mamba concrete adapter |
 | `datasets/__init__.py` | Dataset registry: CLI name → adapter class |
 | `datasets/asvspoof2021_la.py` | ASVspoof 2021 LA concrete adapter (CM keys, min-tDCF) |
-| `config.py` | `BenchmarkConfig` + shared audio constants (`TARGET_SR`, `CHUNK_SAMPLES`) |
-| `audio_loader.py` | `UtteranceDataset`, worker-based chunking, `build_loader()` |
+| `config.py` | `BenchmarkConfig` (incl. VAD/overlap settings) + shared audio constants (`TARGET_SR`, `CHUNK_SAMPLES`) |
+| `audio_loader.py` | `UtteranceDataset`, VAD filtering, sliding-window chunking, `build_loader()` |
 | `inference.py` | Batched inference loop, RTF timing, score aggregation |
 | `metrics.py` | EER, AUC-ROC, FAR/FRR, classification metrics, RTF stats (pure, no I/O) |
 | `reporter.py` | Console output, `scores.txt`, `summary.txt` |
@@ -109,7 +119,11 @@ flowchart TD
 
     subgraph Loading["audio_loader.py"]
         AL["UtteranceDataset\n+ DataLoader workers"]
-        AL -->|"(utt_id, Tensor[N, 8000])"| Chunks
+        AL -->|"read → resample → mono"| VAD
+        VAD["Optional VAD filter\nWebRTC 30ms frames\n--use_vad · --vad_mode"]
+        VAD -->|"voiced audio"| SW
+        SW["Sliding-window chunking\n--overlap 0-99%%\n0%% default · no overlap"]
+        SW -->|"(utt_id, Tensor[N, 8000])"| Chunks
         Chunks["Chunked audio\n16kHz · 16-bit · 500ms"]
     end
 
@@ -166,13 +180,15 @@ sequenceDiagram
     CLI->>DA: audio_path(utt_id) × N
     DA-->>CLI: list[str]
 
-    CLI->>AL: build_loader(flac_paths)
+    CLI->>AL: build_loader(flac_paths, use_vad, vad_mode, overlap_pct)
     AL-->>CLI: DataLoader
 
     CLI->>MA: load(device)
 
     loop per utterance
-        AL->>AL: worker: read → resample → chunk
+        AL->>AL: worker: read → resample → mono
+        AL->>AL: optional: VAD filter (30ms WebRTC frames)
+        AL->>AL: sliding-window chunk (hop_samples)
         AL-->>INF: (utt_id, Tensor[N, 8000])
         INF->>MA: predict(mini_batch)
         MA-->>INF: scores Tensor[n]
@@ -212,6 +228,22 @@ python -m scripts.benchmarking \
     --phase     eval \
     --batch_size 32 \
     --num_workers 8
+
+# With VAD-filtered chunking (discard silence before inference)
+python -m scripts.benchmarking \
+    --model   xlsr-mamba \
+    --dataset asvspoof2021-la \
+    --eval_dir  data/ASVspoof2021_LA_eval/flac \
+    --keys_dir  data/keys/LA \
+    --use_vad --vad_mode 2
+
+# With VAD and 80% overlapping sliding window
+python -m scripts.benchmarking \
+    --model   xlsr-mamba \
+    --dataset asvspoof2021-la \
+    --eval_dir  data/ASVspoof2021_LA_eval/flac \
+    --keys_dir  data/keys/LA \
+    --use_vad --overlap 80
 
 # Disable min-tDCF (no --keys_dir → adapter skips ASV error rates)
 python -m scripts.benchmarking \
