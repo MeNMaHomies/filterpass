@@ -13,13 +13,17 @@ import soundfile as sf
 
 from .base import Augmentation
 
+_FORMAT_MAP = {
+    ".flac": ("FLAC", "PCM_16"),
+    ".wav": ("WAV", "PCM_16"),
+}
+
 
 def augment_file(
     input_path: str,
     output_path: str,
     transform: Augmentation,
     seed: Optional[int] = None,
-    output_subtype: str = "PCM_16",
 ) -> None:
     if seed is not None:
         random.seed(seed)
@@ -33,8 +37,13 @@ def augment_file(
 
     out_audio = np.stack(augmented, axis=1) if stereo else augmented[0]
 
+    # Determine output format based on file extension
+    ext = Path(output_path).suffix.lower()
+    # Default to FLAC if extension is unrecognized
+    fmt, subtype = _FORMAT_MAP.get(ext, ("FLAC", "PCM_16"))
+
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    sf.write(output_path, out_audio, sr, format="FLAC", subtype=output_subtype)
+    sf.write(output_path, out_audio, sr, format=fmt, subtype=subtype)
     print(f"  {input_path}  ->  {output_path}")
 
 
@@ -43,16 +52,17 @@ def augment_directory(
     output_dir: str,
     transform: Augmentation,
     n_augmentations: int = 1,
-    output_subtype: str = "PCM_16",
 ) -> None:
-    input_files = sorted(Path(input_dir).rglob("*.flac"))
+    input_files = sorted(
+        f for ext in ("*.flac", "*.wav") for f in Path(input_dir).rglob(ext)
+    )
     if not input_files:
-        print(f"[warn] No .flac files found in {input_dir}")
+        print(f"[warn] No .flac or .wav files found in {input_dir}")
         return
 
-    for flac_file in input_files:
-        rel = flac_file.relative_to(input_dir)
+    for audio_file in input_files:
+        rel = audio_file.relative_to(input_dir)
         for i in range(n_augmentations):
             stem = rel.stem + (f"_aug{i + 1}" if n_augmentations > 1 else "_aug")
-            out_path = Path(output_dir) / rel.parent / (stem + ".flac")
-            augment_file(str(flac_file), str(out_path), transform, seed=i, output_subtype=output_subtype)
+            out_path = Path(output_dir) / rel.parent / (stem + rel.suffix)
+            augment_file(str(audio_file), str(out_path), transform, seed=i)

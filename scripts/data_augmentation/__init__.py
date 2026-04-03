@@ -1,22 +1,58 @@
+from .augmentations import (
+    BackgroundNoise,
+    BandpassFilter,
+    BrownNoise,
+    CodecDistortion,
+    MicColoration,
+    PacketLoss,
+    PinkNoise,
+    RandomGain,
+    RoomImpulseResponse,
+    TimeStretch,
+    WhiteNoise,
+)
 from .base import Augmentation
 from .compose import Compose, OneOf, SomeOf
-from .augmentations import (
-    WhiteNoise, PinkNoise, BrownNoise, BackgroundNoise,
-    RoomImpulseResponse, BandpassFilter, MicColoration, CodecDistortion,
-    PacketLoss, TimeStretch, RandomGain,
+from .pipeline import augment_directory, augment_file
+from .presets import (
+    adversarial,
+    full,
+    light,
+    meeting_room,
+    noisy_mobile,
+    pstn,
+    telephony,
+    voip,
 )
-from .presets import telephony, full, light
-from .pipeline import augment_file, augment_directory
 
 __all__ = [
     # Base + combinators
-    "Augmentation", "Compose", "OneOf", "SomeOf",
+    "Augmentation",
+    "Compose",
+    "OneOf",
+    "SomeOf",
     # Augmentations
-    "WhiteNoise", "PinkNoise", "BrownNoise", "BackgroundNoise",
-    "RoomImpulseResponse", "BandpassFilter", "MicColoration", "CodecDistortion",
-    "PacketLoss", "TimeStretch", "RandomGain",
+    "WhiteNoise",
+    "PinkNoise",
+    "BrownNoise",
+    "BackgroundNoise",
+    "RoomImpulseResponse",
+    "BandpassFilter",
+    "MicColoration",
+    "CodecDistortion",
+    "PacketLoss",
+    "TimeStretch",
+    "RandomGain",
     # Presets
-    "telephony", "full", "light",
+    "telephony",
+    "full",
+    "light",
+    "voip",
+    "pstn",
+    "meeting_room",
+    "noisy_mobile",
+    "adversarial",
     # File I/O
-    "augment_file", "augment_directory",
+    "augment_file",
+    "augment_directory",
 ]

@@ -13,7 +13,7 @@ import scipy.signal as sps
 from ..base import Augmentation
 
 try:
-    import pyroomacoustics as pra
+    import pyroomacoustics as pra  # type: ignore
 
     _HAS_PRA = True
 except ImportError:
