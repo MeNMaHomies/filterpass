@@ -120,3 +120,19 @@ class CodecDistortion(Augmentation):
             * (thr + (1.0 - thr) * np.tanh((np.abs(audio) - thr) / (1.0 - thr + 1e-9))),
         )
         return audio.astype(np.float32)
+
+
+class HardClip(Augmentation):
+    """Hard-clip at a random threshold to simulate microphone overload / saturation."""
+
+    def __init__(
+        self,
+        threshold_range: tuple[float, float] = (0.3, 0.6),
+        p: float = 0.5,
+    ):
+        super().__init__(p=p)
+        self.threshold_range = threshold_range
+
+    def apply(self, audio: np.ndarray, sr: int) -> np.ndarray:
+        thr = random.uniform(*self.threshold_range)
+        return np.clip(audio, -thr, thr).astype(np.float32)

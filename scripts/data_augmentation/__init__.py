@@ -3,6 +3,7 @@ from .augmentations import (
     BandpassFilter,
     BrownNoise,
     CodecDistortion,
+    HardClip,
     MicColoration,
     PacketLoss,
     PinkNoise,
@@ -13,14 +14,26 @@ from .augmentations import (
 )
 from .base import Augmentation
 from .compose import Compose, OneOf, SomeOf
+from .dataset import AudioDataset
 from .pipeline import augment_directory, augment_file
 from .presets import (
     adversarial,
+    cellular_weak,
+    clipping,
+    codec_chain,
+    dropout,
     full,
+    hd_voice,
+    headset,
+    hybrid_meeting,
+    laptop_mic,
     light,
     meeting_room,
+    near_silence,
     noisy_mobile,
+    outdoor_windy,
     pstn,
+    speakerphone,
     telephony,
     voip,
 )
@@ -40,19 +53,36 @@ __all__ = [
     "BandpassFilter",
     "MicColoration",
     "CodecDistortion",
+    "HardClip",
     "PacketLoss",
     "TimeStretch",
     "RandomGain",
-    # Presets
+    # Presets — phone calls
     "telephony",
-    "full",
-    "light",
     "voip",
     "pstn",
+    "cellular_weak",
+    "hd_voice",
+    "speakerphone",
+    "codec_chain",
+    # Presets — live meetings
     "meeting_room",
+    "laptop_mic",
+    "headset",
+    "hybrid_meeting",
+    "outdoor_windy",
     "noisy_mobile",
+    # Presets — edge cases
+    "near_silence",
+    "dropout",
+    "clipping",
     "adversarial",
+    # Presets — general
+    "full",
+    "light",
     # File I/O
     "augment_file",
     "augment_directory",
+    # Dataset
+    "AudioDataset",
 ]
