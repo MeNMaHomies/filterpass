@@ -35,7 +35,9 @@ from .datasets import REGISTRY as DATASET_REGISTRY
 from . import reporter
 
 
-FILTERPASS_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+FILTERPASS_DIR = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 
 
 def _abs(path: str) -> str:
@@ -45,28 +47,58 @@ def _abs(path: str) -> str:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Deepfake audio detection benchmark")
 
-    p.add_argument("--model",   required=True, choices=list(MODEL_REGISTRY.keys()))
+    p.add_argument("--model", required=True, choices=list(MODEL_REGISTRY.keys()))
     p.add_argument("--dataset", required=True, choices=list(DATASET_REGISTRY.keys()))
 
     # Paths — passed directly to the dataset adapter constructor
-    p.add_argument("--eval_dir", required=True,
-                   help="Directory containing evaluation audio files")
-    p.add_argument("--keys_dir", default=None,
-                   help="Dataset key/metadata directory (if required by the dataset adapter)")
+    p.add_argument(
+        "--eval_dir", required=True, help="Directory containing evaluation audio files"
+    )
+    p.add_argument(
+        "--keys_dir",
+        default=None,
+        help="Dataset key/metadata directory (if required by the dataset adapter)",
+    )
 
-    p.add_argument("--out_dir",     default=None,
-                   help="Output directory (defaults to results/<model>-<dataset>)")
-    p.add_argument("--phase",       default="eval")
-    p.add_argument("--batch_size",  type=int, default=32)
+    p.add_argument(
+        "--out_dir",
+        default=None,
+        help="Output directory (defaults to results/<model>-<dataset>)",
+    )
+    p.add_argument("--phase", default="eval")
+    p.add_argument("--batch_size", type=int, default=32)
     p.add_argument("--num_workers", type=int, default=8)
 
     # Model repo path (for models that require an external code checkout)
-    p.add_argument("--repo_path", default=None,
-                   help="Path to the model's external repo (added to sys.path)")
+    p.add_argument(
+        "--repo_path",
+        default=None,
+        help="Path to the model's external repo (added to sys.path)",
+    )
 
     # XLSR-Mamba specific — ignored by other adapters
-    p.add_argument("--emb_size",     type=int, default=144)
+    p.add_argument("--emb_size", type=int, default=144)
     p.add_argument("--num_encoders", type=int, default=12)
+
+    # VAD parameters — ignored by other adapters
+    p.add_argument(
+        "--use_vad",
+        action="store_true",
+        help="Whether to apply VAD and run the model only on voiced segments (not all adapters support this)",
+    )
+    p.add_argument(
+        "--vad_mode",
+        type=int,
+        default=2,
+        choices=[0, 1, 2, 3],
+        help="VAD aggressiveness mode (0 to 3, higher is more aggressive)",
+    )
+    p.add_argument(
+        "--vad_hop_ms",
+        type=int,
+        default=100,
+        help="VAD hop size in milliseconds (how much to slide the window forward after sending to the model)",
+    )
 
     return p
 
@@ -79,7 +111,7 @@ def _build_model(args):
         kwargs["repo_path"] = args.repo_path or os.path.normpath(
             os.path.join(FILTERPASS_DIR, "..", "XLSR-Mamba")
         )
-        kwargs["emb_size"]     = args.emb_size
+        kwargs["emb_size"] = args.emb_size
         kwargs["num_encoders"] = args.num_encoders
     elif args.repo_path:
         kwargs["repo_path"] = args.repo_path
@@ -96,6 +128,7 @@ def _build_dataset(args, em=None):
 
     # Pass eval_metrics only to adapters that declare it (ASVspoof tDCF)
     import inspect
+
     if "eval_metrics_module" in inspect.signature(adapter_cls.__init__).parameters:
         kwargs["eval_metrics_module"] = em
 
@@ -112,6 +145,9 @@ def main() -> None:
         phase=args.phase,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
+        vad=args.use_vad,
+        vad_mode=args.vad_mode,
+        hop_ms=args.vad_hop_ms,
     )
 
     # ── Model ─────────────────────────────────────────────────────────────────
@@ -124,10 +160,11 @@ def main() -> None:
         torch.cuda.reset_peak_memory_stats(device)
 
     model.load(device)
-    param_count  = model.parameter_count()
+    param_count = model.parameter_count()
     vram_load_gb = (
-        torch.cuda.max_memory_allocated(device) / (1024 ** 3)
-        if device.type == "cuda" else 0.0
+        torch.cuda.max_memory_allocated(device) / (1024**3)
+        if device.type == "cuda"
+        else 0.0
     )
     print(f"Parameters: {param_count:,}")
 
@@ -140,21 +177,33 @@ def main() -> None:
 
     # ── Dataset ───────────────────────────────────────────────────────────────
     dataset = _build_dataset(args, em)
-    trials  = dataset.load_trials(cfg.phase)
+    trials = dataset.load_trials(cfg.phase)
 
     # ── Inference ─────────────────────────────────────────────────────────────
     os.makedirs(out_dir, exist_ok=True)
 
     flac_paths = [dataset.audio_path(t.utt_id) for t in trials]
-    print(f"\nRunning inference on {len(flac_paths)} utterances "
-          f"({cfg.num_workers} loader workers, batch_size={cfg.batch_size})...")
+    print(
+        f"\nRunning inference on {len(flac_paths)} utterances "
+        f"({cfg.num_workers} loader workers, batch_size={cfg.batch_size})..."
+    )
 
-    loader = build_loader(flac_paths, cfg.num_workers)
+    if cfg.vad:
+        print(f"VAD enabled (mode={cfg.vad_mode}, hop={cfg.hop_ms}ms)")
+
+    loader = build_loader(
+        flac_paths,
+        cfg.num_workers,
+        use_vad=cfg.vad,
+        vad_mode=cfg.vad_mode,
+        hop_ms=cfg.hop_ms,
+    )
     all_scores, all_rtf, skipped = run_inference(model, loader, device, cfg.batch_size)
 
     vram_peak_gb = (
-        torch.cuda.max_memory_allocated(device) / (1024 ** 3)
-        if device.type == "cuda" else 0.0
+        torch.cuda.max_memory_allocated(device) / (1024**3)
+        if device.type == "cuda"
+        else 0.0
     )
 
     if not all_scores:
@@ -168,14 +217,27 @@ def main() -> None:
 
     # ── Report ────────────────────────────────────────────────────────────────
     reporter.print_results(
-        detection, rtf_stats, len(all_scores), skipped,
-        param_count, vram_load_gb, vram_peak_gb,
+        detection,
+        rtf_stats,
+        len(all_scores),
+        skipped,
+        param_count,
+        vram_load_gb,
+        vram_peak_gb,
     )
     reporter.write_scores(out_dir, all_scores)
     reporter.write_summary(
-        out_dir, model.name, dataset.name, cfg.phase,
-        len(all_scores), skipped, param_count,
-        vram_load_gb, vram_peak_gb, detection, rtf_stats,
+        out_dir,
+        model.name,
+        dataset.name,
+        cfg.phase,
+        len(all_scores),
+        skipped,
+        param_count,
+        vram_load_gb,
+        vram_peak_gb,
+        detection,
+        rtf_stats,
     )
 
     print(f"\nResults saved to {out_dir}/")
