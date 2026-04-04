@@ -8,3 +8,5 @@ ASVspoof2021_LA_eval
 .vscode
 __pycache__
 xlsr2_300m.pt
+
+best_model*
