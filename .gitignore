@@ -9,4 +9,5 @@ ASVspoof2021_LA_eval
 __pycache__
 xlsr2_300m.pt
 
-best_model*
+checkpoints*
+.env
