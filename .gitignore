@@ -11,3 +11,5 @@ xlsr2_300m.pt
 
 checkpoints*
 .env
+output*
+LA*
