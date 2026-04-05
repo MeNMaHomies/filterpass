@@ -63,6 +63,6 @@ def augment_directory(
     for audio_file in input_files:
         rel = audio_file.relative_to(input_dir)
         for i in range(n_augmentations):
-            stem = rel.stem + (f"_aug{i + 1}" if n_augmentations > 1 else "_aug")
+            stem = rel.stem
             out_path = Path(output_dir) / rel.parent / (stem + rel.suffix)
             augment_file(str(audio_file), str(out_path), transform, seed=i)
