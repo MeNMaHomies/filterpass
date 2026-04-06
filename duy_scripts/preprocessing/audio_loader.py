@@ -2,9 +2,10 @@ import numpy as np
 
 TARGET_SR = 16000
 CHUNK_DURATION_S = 0.5
-CHUNK_SAMPLES = int(TARGET_SR * CHUNK_DURATION_S)  # 8000
+CHUNK_SAMPLES = int(TARGET_SR * CHUNK_DURATION_S)  # 8000 — default only
 _VAD_FRAME_MS = 30  # WebRTC VAD requires 10, 20, or 30 ms frames
 _BYTES_PER_SAMPLE = 2  # 16-bit PCM
+
 # ── VAD ───────────────────────────────────────────────────────────────────────
 
 
@@ -40,21 +41,29 @@ def _vad_filter(audio: np.ndarray, sr: int, vad_mode: int) -> np.ndarray:
 # ── Chunking ──────────────────────────────────────────────────────────────────
 
 
-def _chunk_audio(audio: np.ndarray, hop_samples: int) -> list[np.ndarray]:
+def _chunk_audio(
+    audio: np.ndarray,
+    hop_samples: int,
+    chunk_samples: int = CHUNK_SAMPLES,
+) -> list[np.ndarray]:
     """
-    Split audio into CHUNK_SAMPLES-sized windows advancing by hop_samples.
-    The final chunk is zero-padded if shorter than CHUNK_SAMPLES.
+    Split audio into chunk_samples-sized windows advancing by hop_samples.
+    The final chunk is zero-padded if shorter than chunk_samples.
+
+    Args:
+        audio:         1-D float32 waveform.
+        hop_samples:   Step size between windows.
+        chunk_samples: Window size in samples (default: module-level CHUNK_SAMPLES).
     """
     if len(audio) == 0:
         return []
 
     chunks = []
 
-    # Full windows
-    for start in range(0, max(len(audio) - CHUNK_SAMPLES + 1, 1), hop_samples):
-        chunk = audio[start : start + CHUNK_SAMPLES]
-        if len(chunk) < CHUNK_SAMPLES:
-            chunk = np.pad(chunk, (0, CHUNK_SAMPLES - len(chunk)))
+    for start in range(0, max(len(audio) - chunk_samples + 1, 1), hop_samples):
+        chunk = audio[start : start + chunk_samples]
+        if len(chunk) < chunk_samples:
+            chunk = np.pad(chunk, (0, chunk_samples - len(chunk)))
         chunks.append(chunk)
 
     return chunks
