@@ -9,7 +9,9 @@ The CLI --model flag matches against REGISTRY keys.
 """
 
 from .xlsr_mamba import XLSRMamba
+from .fatigue_sense_sap import FatigueSenseSAP
 
 REGISTRY: dict[str, type] = {
     "xlsr-mamba": XLSRMamba,
+    "fatigue-sense-sap": FatigueSenseSAP,
 }
