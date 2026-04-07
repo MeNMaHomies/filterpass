@@ -1,0 +1,4 @@
+model,dataset,phase,scored_utterances,skipped_utterances,parameters,vram_load_gb,vram_peak_gb,eer_pct,min_tdcf,auc_roc,far_at_eer_pct,frr_at_eer_pct,accuracy_pct,precision,recall,f1,rtf_mean,rtf_median,rtf_p95,rtf_max,latency_mean_ms,latency_median_ms,latency_p95_ms
+XLSR-Mamba (AustinXiao/XLSR-Mamba-LA),ASVspoof 2021 LA,eval,148176,0,319327542,1.19,1.51,6.96,0.3365,0.9783,6.96,6.96,93.04,0.5977,0.9304,0.7278,0.0405,0.0300,0.1043,0.9598,20.2,15.0,52.1
+Filterpass-SAP (Wav2Vec2-base + Self-Attention Pooling),ASVspoof 2021 LA,eval,148176,0,94766211,0.35,0.56,13.88,,0.9310,13.88,13.88,86.12,0.4080,0.8612,0.5537,0.0147,0.0120,0.0334,0.1896,7.3,6.0,16.7
+Filterpass-SAP (Wav2Vec2-base + Self-Attention Pooling),ASVspoof 2021 LA,eval,148176,0,94766211,0.35,0.61,13.88,0.4305,0.9310,13.88,13.88,86.12,0.4080,0.8612,0.5537,0.0021,0.0021,0.0031,0.0161,1.1,1.1,1.5

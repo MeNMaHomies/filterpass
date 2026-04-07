@@ -202,6 +202,7 @@ def main() -> None:
         use_vad=cfg.vad,
         vad_mode=cfg.vad_mode,
         overlap_pct=cfg.overlap_pct,
+        normalize=model.normalize_input,
     )
     all_scores, all_rtf, skipped_ids = run_inference(
         model, loader, device, cfg.batch_size
@@ -248,10 +249,28 @@ def main() -> None:
         rtf_stats,
     )
 
+    csv_path = os.path.join(
+        os.path.dirname(os.path.dirname(out_dir)), "metrics_summary.csv"
+    )
+    reporter.append_to_csv(
+        csv_path,
+        model.name,
+        dataset.name,
+        cfg.phase,
+        len(all_scores),
+        len(skipped_ids),
+        param_count,
+        vram_load_gb,
+        vram_peak_gb,
+        detection,
+        rtf_stats,
+    )
+
     print(f"\nResults saved to {out_dir}/")
     print(f"  scores.txt  — per-utterance scores")
     print(f"  skipped.txt — utterances that failed to load (if any)")
     print(f"  summary.txt — full metrics summary")
+    print(f"  {csv_path} — appended to CSV")
 
 
 if __name__ == "__main__":

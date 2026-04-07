@@ -290,6 +290,16 @@ def outdoor_windy() -> Compose:
     )
 
 
+def deepfake_targeted() -> Compose:
+    return OneOf(
+        [
+            pstn(),
+            voip(),
+        ],
+        p=0.5,
+    )
+
+
 def near_silence() -> Compose:
     """
     Edge case: very quiet / distant recording.
