@@ -1,4 +1,4 @@
-Model:            FatigueSense-SAP (Wav2Vec2-base + Self-Attention Pooling)
+Model:            Filterpass-SAP (Wav2Vec2-base + Self-Attention Pooling)
 Dataset:          ASVspoof 2021 LA (phase=eval)
 Scored:           148176 utterances
 Skipped:          0 utterances
