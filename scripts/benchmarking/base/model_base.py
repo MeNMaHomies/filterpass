@@ -50,3 +50,14 @@ class BenchmarkModel(ABC):
     def parameter_count(self) -> int:
         """Return total trainable parameter count (override if not a nn.Module)."""
         return 0
+
+    @property
+    def normalize_input(self) -> bool:
+        """
+        Whether the benchmarking loader should peak-normalize waveforms to [-1, 1]
+        before passing them to this model.
+
+        Override and return False for models that were trained on raw (unnormalized)
+        audio or that apply their own normalization internally.
+        """
+        return True

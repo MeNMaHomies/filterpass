@@ -16,7 +16,6 @@ from safetensors.torch import load_file
 
 from ..base.model_base import BenchmarkModel
 
-
 _HF_REPO = "AustinXiao/XLSR-Mamba-LA"
 _HF_FILE = "model.safetensors"
 

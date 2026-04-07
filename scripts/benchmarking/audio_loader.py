@@ -85,6 +85,7 @@ def _load_and_chunk(
     use_vad: bool,
     vad_mode: int,
     hop_samples: int,
+    normalize: bool = True,
 ) -> tuple[str, torch.Tensor | None]:
     """
     Runs inside DataLoader worker processes.
@@ -93,21 +94,32 @@ def _load_and_chunk(
     """
     utt_id = os.path.splitext(os.path.basename(flac_path))[0]
     try:
-        import librosa
-        import torchaudio
-
+        # sf.read is fastest, but some ASVspoof FLAC files use encodings that
+        # older libsndfile versions can't handle — fall back to librosa in that case.
         try:
-            waveform, sr = torchaudio.load(flac_path, backend="ffmpeg")
-            audio = waveform.mean(dim=0).numpy()
+            audio, sr = sf.read(flac_path, dtype="float32", always_2d=False)
+            if audio.ndim > 1:
+                audio = audio.mean(axis=1)
         except Exception:
+            import librosa
             audio, sr = librosa.load(flac_path, sr=None, mono=True)
 
-        # Force 16 kHz
+        # Force 16 kHz (ASVspoof files are already 16kHz — this is a safety net)
         if sr != TARGET_SR:
-            audio = librosa.resample(audio, orig_sr=sr, target_sr=TARGET_SR)
+            import scipy.signal as sps
+
+            audio = sps.resample(audio, int(len(audio) * TARGET_SR / sr)).astype(
+                np.float32
+            )
 
         if len(audio) == 0:
             return utt_id, None
+
+        # Peak-normalise to [-1, 1] when requested by the model adapter
+        if normalize:
+            max_val = np.max(np.abs(audio))
+            if max_val > 0:
+                audio = audio / max_val
 
         # VAD: discard silence at 30ms frame level, keep only voiced audio
         if use_vad:
@@ -138,11 +150,13 @@ class UtteranceDataset(Dataset):
         use_vad: bool = False,
         vad_mode: int = 2,
         hop_samples: int = CHUNK_SAMPLES,
+        normalize: bool = True,
     ):
         self.paths = flac_paths
         self.use_vad = use_vad
         self.vad_mode = vad_mode
         self.hop_samples = hop_samples
+        self.normalize = normalize
 
     def __len__(self) -> int:
         return len(self.paths)
@@ -153,6 +167,7 @@ class UtteranceDataset(Dataset):
             self.use_vad,
             self.vad_mode,
             self.hop_samples,
+            self.normalize,
         )
 
 
@@ -167,11 +182,12 @@ def build_loader(
     use_vad: bool = False,
     vad_mode: int = 2,
     overlap_pct: int = 0,
+    normalize: bool = True,
 ) -> DataLoader:
     hop_samples = max(1, int(CHUNK_SAMPLES * (1 - overlap_pct / 100)))
 
     return DataLoader(
-        UtteranceDataset(flac_paths, use_vad, vad_mode, hop_samples),
+        UtteranceDataset(flac_paths, use_vad, vad_mode, hop_samples, normalize),
         batch_size=1,
         num_workers=num_workers,
         collate_fn=_collate,

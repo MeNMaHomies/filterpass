@@ -10,9 +10,9 @@ Fill in _HF_REPO and _HF_FILE before running.
 import torch
 from huggingface_hub import hf_hub_download
 
-from ..base.model_base import BenchmarkModel
 from duy_scripts.classifiers.model_SAP import SAPClassifier
 
+from ..base.model_base import BenchmarkModel
 
 _HF_REPO = "Menmahomies/SAP_Classifier"
 _HF_FILE = "best_model_SAP.pt"
@@ -24,7 +24,7 @@ _BONAFIDE_IDX = 0
 # ── Adapter ───────────────────────────────────────────────────────────────────
 
 
-class FatigueSenseSAP(BenchmarkModel):
+class FilterpassSAP(BenchmarkModel):
     def __init__(
         self, model_name: str = "facebook/wav2vec2-base", freeze_extractor: bool = True
     ):
@@ -34,7 +34,7 @@ class FatigueSenseSAP(BenchmarkModel):
 
     @property
     def name(self) -> str:
-        return "FatigueSense-SAP (Wav2Vec2-base + Self-Attention Pooling)"
+        return "Filterpass-SAP (Wav2Vec2-base + Self-Attention Pooling)"
 
     def load(self, device: torch.device) -> None:
         print("Locating weights from Hugging Face...")

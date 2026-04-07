@@ -2,7 +2,7 @@
 Metric computation for anti-spoofing benchmarks.
 
 All functions are pure (no I/O), model-agnostic, and dataset-agnostic.
-EER is implemented natively — no external eval_metrics dependency here.
+EER delegates to eval_metrics.compute_eer (official ASVspoof DET-curve method).
 Dataset-specific metrics (e.g. min-tDCF) are handled by DatasetAdapter.extra_metrics.
 """
 
@@ -15,38 +15,9 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
-from .config import CHUNK_DURATION_S
 from .base.dataset_base import Trial
-
-
-# ── EER ───────────────────────────────────────────────────────────────────────
-
-
-def compute_eer(
-    bona_scores: np.ndarray, spoof_scores: np.ndarray
-) -> tuple[float, float]:
-    """
-    Equal Error Rate via FNR/FPR curve intersection.
-    Returns (eer, threshold) where eer is in [0, 1].
-    """
-    scores = np.concatenate([bona_scores, spoof_scores])
-    labels = np.concatenate([np.ones(len(bona_scores)), np.zeros(len(spoof_scores))])
-
-    order = np.argsort(scores)[::-1]
-    sorted_labels = labels[order]
-    sorted_scores = scores[order]
-
-    tp = np.cumsum(sorted_labels)
-    fp = np.cumsum(1 - sorted_labels)
-
-    fnr = 1 - tp / len(bona_scores)
-    fpr = fp / len(spoof_scores)
-
-    idx = np.argmin(np.abs(fnr - fpr))
-    eer = float((fnr[idx] + fpr[idx]) / 2)
-    threshold = float(sorted_scores[idx])
-    return eer, threshold
-
+from .config import CHUNK_DURATION_S
+from .eval_metrics import compute_eer
 
 # ── Detection metrics ──────────────────────────────────────────────────────────
 

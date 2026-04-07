@@ -8,10 +8,10 @@ To register a new model adapter:
 The CLI --model flag matches against REGISTRY keys.
 """
 
+from .filterpass_sap import FilterpassSAP
 from .xlsr_mamba import XLSRMamba
-from .fatigue_sense_sap import FatigueSenseSAP
 
 REGISTRY: dict[str, type] = {
     "xlsr-mamba": XLSRMamba,
-    "fatigue-sense-sap": FatigueSenseSAP,
+    "filterpass-sap": FilterpassSAP,
 }

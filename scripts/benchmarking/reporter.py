@@ -5,7 +5,9 @@ Pure I/O layer — receives dicts from metrics.py and writes scores.txt / summar
 No model or dataset assumptions.
 """
 
+import csv
 import os
+from pathlib import Path
 
 _TELEPHONY_CONDITIONS = {"C2", "C3"}  # ASVspoof codec conditions of interest
 
@@ -117,3 +119,86 @@ def write_summary(
         f.write(f"Latency median:   {rtf['latency_median_ms']:.1f} ms\n")
         f.write(f"Latency p95:      {rtf['latency_p95_ms']:.1f} ms\n")
     return path
+
+
+_CSV_HEADER = [
+    "model",
+    "dataset",
+    "phase",
+    "scored_utterances",
+    "skipped_utterances",
+    "parameters",
+    "vram_load_gb",
+    "vram_peak_gb",
+    "eer_pct",
+    "min_tdcf",
+    "auc_roc",
+    "far_at_eer_pct",
+    "frr_at_eer_pct",
+    "accuracy_pct",
+    "precision",
+    "recall",
+    "f1",
+    "rtf_mean",
+    "rtf_median",
+    "rtf_p95",
+    "rtf_max",
+    "latency_mean_ms",
+    "latency_median_ms",
+    "latency_p95_ms",
+]
+
+
+def append_to_csv(
+    csv_path: str,
+    model_name: str,
+    dataset_name: str,
+    phase: str,
+    scored_count: int,
+    skipped_count: int,
+    param_count: int,
+    vram_load_gb: float,
+    vram_peak_gb: float,
+    detection: dict,
+    rtf: dict,
+) -> str:
+    csv_path = str(csv_path)
+    write_header = not Path(csv_path).exists()
+    Path(csv_path).parent.mkdir(parents=True, exist_ok=True)
+
+    min_tdcf = detection.get("min_tDCF")
+
+    row = {
+        "model": model_name,
+        "dataset": dataset_name,
+        "phase": phase,
+        "scored_utterances": scored_count,
+        "skipped_utterances": skipped_count,
+        "parameters": param_count,
+        "vram_load_gb": f"{vram_load_gb:.2f}",
+        "vram_peak_gb": f"{vram_peak_gb:.2f}",
+        "eer_pct": f"{detection['eer_pct']:.2f}",
+        "min_tdcf": f"{min_tdcf:.4f}" if min_tdcf is not None else "",
+        "auc_roc": f"{detection['auc_roc']:.4f}",
+        "far_at_eer_pct": f"{100 * detection['far']:.2f}",
+        "frr_at_eer_pct": f"{100 * detection['frr']:.2f}",
+        "accuracy_pct": f"{100 * detection['accuracy']:.2f}",
+        "precision": f"{detection['precision']:.4f}",
+        "recall": f"{detection['recall']:.4f}",
+        "f1": f"{detection['f1']:.4f}",
+        "rtf_mean": f"{rtf['rtf_mean']:.4f}",
+        "rtf_median": f"{rtf['rtf_median']:.4f}",
+        "rtf_p95": f"{rtf['rtf_p95']:.4f}",
+        "rtf_max": f"{rtf['rtf_max']:.4f}",
+        "latency_mean_ms": f"{rtf['latency_mean_ms']:.1f}",
+        "latency_median_ms": f"{rtf['latency_median_ms']:.1f}",
+        "latency_p95_ms": f"{rtf['latency_p95_ms']:.1f}",
+    }
+
+    with open(csv_path, "a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=_CSV_HEADER)
+        if write_header:
+            writer.writeheader()
+        writer.writerow(row)
+
+    return csv_path

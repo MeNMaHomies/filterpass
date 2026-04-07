@@ -19,8 +19,8 @@ import sys
 import numpy as np
 import pandas as pd
 
+from .. import eval_metrics as em
 from ..base.dataset_base import DatasetAdapter, Trial
-
 
 _CM_KEY = os.path.join("CM", "trial_metadata.txt")
 _ASV_KEY = os.path.join("ASV", "trial_metadata.txt")
@@ -34,17 +34,14 @@ _COL_ASV_SCORE = 2
 
 
 class ASVspoof2021LA(DatasetAdapter):
-    def __init__(self, eval_dir: str, keys_dir: str, eval_metrics_module=None):
+    def __init__(self, eval_dir: str, keys_dir: str):
         """
         Args:
             eval_dir: Directory containing .flac evaluation audio files.
             keys_dir: Root of the keys directory (contains CM/ and ASV/).
-            eval_metrics_module: The `eval_metrics` module from the ASVspoof/model repo,
-                                 required only for min-tDCF. Pass None to skip tDCF.
         """
         self._eval_dir = eval_dir
         self._keys_dir = keys_dir
-        self._em = eval_metrics_module
 
     @property
     def name(self) -> str:
@@ -84,9 +81,6 @@ class ASVspoof2021LA(DatasetAdapter):
         trials: list[Trial],
         phase: str,
     ) -> dict:
-        if self._em is None:
-            return {"min_tDCF": None}
-
         asv_key_file = os.path.join(self._keys_dir, _ASV_KEY)
         asv_scr_file = os.path.join(self._keys_dir, _ASV_SCR)
 
@@ -94,7 +88,6 @@ class ASVspoof2021LA(DatasetAdapter):
             print("WARNING: ASV keys/scores not found — skipping min-tDCF.")
             return {"min_tDCF": None}
 
-        em = self._em
         asv_key = pd.read_csv(asv_key_file, sep=" ", header=None)
         asv_scr = pd.read_csv(asv_scr_file, sep=" ", header=None)
 
