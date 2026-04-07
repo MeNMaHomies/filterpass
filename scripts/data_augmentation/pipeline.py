@@ -7,10 +7,8 @@ Decoupled from any specific augmentation — accepts any Augmentation callable.
 import random
 from pathlib import Path
 from typing import Optional
-
 import numpy as np
 import soundfile as sf
-
 from .base import Augmentation
 
 _FORMAT_MAP = {

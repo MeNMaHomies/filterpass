@@ -52,7 +52,12 @@ class SomeOf(Augmentation):
     `n` can be a fixed int or a (min, max) tuple.
     """
 
-    def __init__(self, transforms: list[Augmentation], n: int | tuple[int, int] = 1, p: float = 1.0):
+    def __init__(
+        self,
+        transforms: list[Augmentation],
+        n: int | tuple[int, int] = 1,
+        p: float = 1.0,
+    ):
         super().__init__(p=p)
         self.transforms = transforms
         self.n = n
