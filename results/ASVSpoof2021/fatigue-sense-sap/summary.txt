@@ -1,0 +1,33 @@
+Model:            FatigueSense-SAP (Wav2Vec2-base + Self-Attention Pooling)
+Dataset:          ASVspoof 2021 LA (phase=eval)
+Scored:           148176 utterances
+Skipped:          0 utterances
+
+--- Model ---
+Parameters:       94,766,211
+VRAM (load):      0.35 GB
+VRAM (peak):      0.56 GB
+
+--- Anti-Spoofing ---
+EER:              13.88%
+AUC-ROC:          0.9310
+FAR (@ EER thr):  13.88%
+FRR (@ EER thr):  13.88%
+
+--- Classification (@ EER threshold) ---
+Accuracy:         86.12%
+Precision:        0.4080
+Recall:           0.8612
+F1:               0.5537
+
+--- Per-Condition EER ---
+  notrim: 13.88%
+
+--- Real-Time Performance (no VAD, per 500ms chunk) ---
+RTF mean:         0.0147
+RTF median:       0.0120
+RTF p95:          0.0334
+RTF max:          0.1896
+Latency mean:     7.3 ms
+Latency median:   6.0 ms
+Latency p95:      16.7 ms
