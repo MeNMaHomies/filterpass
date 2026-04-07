@@ -26,13 +26,21 @@ class ASVspoof2019LADataset(Dataset):
         self.chunk_samples = chunk_samples
         self.hop_samples = max(1, int(chunk_samples * (1 - overlap_pct / 100)))
 
+        # split_map = {
+        #     "train": ("train", "ASVspoof2019.LA.cm.train.trn.txt"),
+        #     "dev":   ("dev",   "ASVspoof2019.LA.cm.dev.trl.txt"),
+        #     "eval":  ("eval",  "ASVspoof2019.LA.cm.eval.trl.txt"),
+        # }
+
         split_map = {
-            "train": ("train", "ASVspoof2019.LA.cm.train.trn.txt"),
-            "dev":   ("dev",   "ASVspoof2019.LA.cm.dev.trl.txt"),
-            "eval":  ("eval",  "ASVspoof2019.LA.cm.eval.trl.txt"),
+            "train": ("ASVspoof2019_LA_train/flac", "ASVspoof2019.LA.cm.train.trn.txt"),
+            "dev":   ("ASVspoof2019_LA_dev/flac",   "ASVspoof2019.LA.cm.dev.trl.txt"),
+            "eval":  ("ASVspoof2019_LA_eval/flac",  "ASVspoof2019.LA.cm.eval.trl.txt"),
         }
+
         audio_dir_name, protocol_name = split_map[split]
-        self.audio_dir = os.path.join("../output/", audio_dir_name)
+        # self.audio_dir = os.path.join("../output/", audio_dir_name)
+        self.audio_dir = os.path.join(base_dir, audio_dir_name)
         protocol_path = os.path.join(base_dir, "ASVspoof2019_LA_cm_protocols", protocol_name)
         self.label_map = {"bonafide": 0, "spoof": 1}
 
@@ -65,7 +73,7 @@ class ASVspoof2019LADataset(Dataset):
             for i in range(len(chunks)):
                 self.samples.append((path, item["label"], i))
 
-        print(f"Total chunks: {len(self.samples)}")
+        print(f"Total chunks: {len(self.samples)} load for ", self.audio_dir)
 
     def _load_chunks(self, path: str) -> tuple[str, list[np.ndarray] | None]:
         """
