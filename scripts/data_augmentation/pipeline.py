@@ -42,7 +42,6 @@ def augment_file(
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     sf.write(output_path, out_audio, sr, format=fmt, subtype=subtype)
-    print(f"  {input_path}  ->  {output_path}")
 
 
 def augment_directory(
