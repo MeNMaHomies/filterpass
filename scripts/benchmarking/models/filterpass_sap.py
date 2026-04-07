@@ -22,8 +22,6 @@ _BONAFIDE_IDX = 0
 
 
 # ── Adapter ───────────────────────────────────────────────────────────────────
-
-
 class FilterpassSAP(BenchmarkModel):
     def __init__(
         self, model_name: str = "facebook/wav2vec2-base", freeze_extractor: bool = True

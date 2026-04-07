@@ -7,10 +7,8 @@ Decoupled from any specific augmentation — accepts any Augmentation callable.
 import random
 from pathlib import Path
 from typing import Optional
-
 import numpy as np
 import soundfile as sf
-
 from .base import Augmentation
 
 _FORMAT_MAP = {
@@ -44,7 +42,6 @@ def augment_file(
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     sf.write(output_path, out_audio, sr, format=fmt, subtype=subtype)
-    print(f"  {input_path}  ->  {output_path}")
 
 
 def augment_directory(
