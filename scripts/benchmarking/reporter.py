@@ -51,6 +51,16 @@ def print_results(
             print(f"  {cond}: {ceer:.2f}%{marker}")
 
 
+def write_skipped(out_dir: str, skipped_ids: list[str]) -> str | None:
+    if not skipped_ids:
+        return None
+    path = os.path.join(out_dir, "skipped.txt")
+    with open(path, "w") as f:
+        for utt_id in skipped_ids:
+            f.write(f"{utt_id}\n")
+    return path
+
+
 def write_scores(out_dir: str, all_scores: dict[str, float]) -> str:
     path = os.path.join(out_dir, "scores.txt")
     with open(path, "w") as f:

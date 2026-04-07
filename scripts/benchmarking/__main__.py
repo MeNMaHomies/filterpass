@@ -216,7 +216,7 @@ def main() -> None:
         vad_mode=cfg.vad_mode,
         overlap_pct=cfg.overlap_pct,
     )
-    all_scores, all_rtf, skipped = run_inference(model, loader, device, cfg.batch_size)
+    all_scores, all_rtf, skipped_ids = run_inference(model, loader, device, cfg.batch_size)
 
     vram_peak_gb = (
         torch.cuda.max_memory_allocated(device) / (1024**3)
@@ -238,19 +238,20 @@ def main() -> None:
         detection,
         rtf_stats,
         len(all_scores),
-        skipped,
+        len(skipped_ids),
         param_count,
         vram_load_gb,
         vram_peak_gb,
     )
     reporter.write_scores(out_dir, all_scores)
+    reporter.write_skipped(out_dir, skipped_ids)
     reporter.write_summary(
         out_dir,
         model.name,
         dataset.name,
         cfg.phase,
         len(all_scores),
-        skipped,
+        len(skipped_ids),
         param_count,
         vram_load_gb,
         vram_peak_gb,
@@ -260,6 +261,7 @@ def main() -> None:
 
     print(f"\nResults saved to {out_dir}/")
     print(f"  scores.txt  — per-utterance scores")
+    print(f"  skipped.txt — utterances that failed to load (if any)")
     print(f"  summary.txt — full metrics summary")
 
 

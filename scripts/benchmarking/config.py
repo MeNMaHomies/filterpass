@@ -11,7 +11,7 @@ class BenchmarkConfig:
     """Inference execution config — no dataset or model paths."""
 
     out_dir: str
-    phase: str = "eval"
+    phase: str | None = None  # None = all phases
     batch_size: int = 32
     num_workers: int = 8
 

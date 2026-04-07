@@ -93,19 +93,17 @@ def _load_and_chunk(
     """
     utt_id = os.path.splitext(os.path.basename(flac_path))[0]
     try:
+        import librosa
         import torchaudio
 
-        waveform, sr = torchaudio.load(flac_path)
-        audio = waveform[0].numpy()
-
-        # Force mono
-        if audio.ndim > 1:
-            audio = audio[:, 0]
+        try:
+            waveform, sr = torchaudio.load(flac_path, backend="ffmpeg")
+            audio = waveform.mean(dim=0).numpy()
+        except Exception:
+            audio, sr = librosa.load(flac_path, sr=None, mono=True)
 
         # Force 16 kHz
         if sr != TARGET_SR:
-            import librosa
-
             audio = librosa.resample(audio, orig_sr=sr, target_sr=TARGET_SR)
 
         if len(audio) == 0:

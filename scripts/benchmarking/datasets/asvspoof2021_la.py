@@ -57,13 +57,14 @@ class ASVspoof2021LA(DatasetAdapter):
             sys.exit(1)
 
         meta = pd.read_csv(cm_file, sep=" ", header=None)
-        phase_rows = meta[meta[_COL_PHASE] == phase]
+        phase_rows = meta if phase is None else meta[meta[_COL_PHASE] == phase]
 
-        if len(phase_rows) == 0:
+        if phase is not None and len(phase_rows) == 0:
             print(f"WARNING: No entries for phase='{phase}'. Using all entries.")
             phase_rows = meta
 
-        print(f"CM trials loaded ({phase}): {len(phase_rows)}")
+        label = phase if phase is not None else "all"
+        print(f"CM trials loaded ({label}): {len(phase_rows)}")
 
         return [
             Trial(
@@ -97,7 +98,7 @@ class ASVspoof2021LA(DatasetAdapter):
         asv_key = pd.read_csv(asv_key_file, sep=" ", header=None)
         asv_scr = pd.read_csv(asv_scr_file, sep=" ", header=None)
 
-        phase_mask = asv_key[_COL_PHASE] == phase
+        phase_mask = slice(None) if phase is None else asv_key[_COL_PHASE] == phase
         asv_scr_phase = asv_scr[phase_mask]
 
         tar_asv = asv_scr_phase[_COL_ASV_SCORE][
