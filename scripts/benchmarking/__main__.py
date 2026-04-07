@@ -137,18 +137,12 @@ def _build_model(args):
     return adapter_cls(**kwargs)
 
 
-def _build_dataset(args, em=None):
+def _build_dataset(args):
     adapter_cls = DATASET_REGISTRY[args.dataset]
     kwargs = {"eval_dir": _abs(args.eval_dir)}
 
     if args.keys_dir is not None:
         kwargs["keys_dir"] = _abs(args.keys_dir)
-
-    # Pass eval_metrics only to adapters that declare it (ASVspoof tDCF)
-    import inspect
-
-    if "eval_metrics_module" in inspect.signature(adapter_cls.__init__).parameters:
-        kwargs["eval_metrics_module"] = em
 
     return adapter_cls(**kwargs)
 
@@ -186,15 +180,8 @@ def main() -> None:
     )
     print(f"Parameters: {param_count:,}")
 
-    # ── eval_metrics — optional, sourced from model repo after load() sets sys.path ──
-    em = None
-    try:
-        import eval_metrics as em  # type: ignore # noqa: PLC0415
-    except ImportError:
-        pass  # dataset adapter handles the None case gracefully
-
     # ── Dataset ───────────────────────────────────────────────────────────────
-    dataset = _build_dataset(args, em)
+    dataset = _build_dataset(args)
     trials = dataset.load_trials(cfg.phase)
 
     # ── Inference ─────────────────────────────────────────────────────────────
@@ -216,7 +203,9 @@ def main() -> None:
         vad_mode=cfg.vad_mode,
         overlap_pct=cfg.overlap_pct,
     )
-    all_scores, all_rtf, skipped_ids = run_inference(model, loader, device, cfg.batch_size)
+    all_scores, all_rtf, skipped_ids = run_inference(
+        model, loader, device, cfg.batch_size
+    )
 
     vram_peak_gb = (
         torch.cuda.max_memory_allocated(device) / (1024**3)
