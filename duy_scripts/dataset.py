@@ -1,15 +1,35 @@
 import os
-import numpy as np
-import torch
-import librosa
-import soundfile as sf
-from torch.utils.data import Dataset
 
-from preprocessing import _vad_filter, _chunk_audio  # fixed: was 'preprocessing'
+import librosa
+import numpy as np
+import soundfile as sf
+import torch
+from duy_scripts.preprocessing import _chunk_audio, _vad_filter
+from torch.utils.data import Dataset
+from tqdm import tqdm
+
+
+def _read_audio(path: str) -> tuple[np.ndarray, int]:
+    """Load audio via torchaudio+ffmpeg, falling back to librosa on failure."""
+    try:
+        import torchaudio
+        waveform, sr = torchaudio.load(path, backend="ffmpeg")
+        return waveform.squeeze(0).numpy(), sr
+    except Exception:
+        waveform_np, sr = librosa.load(path, sr=None, mono=False)
+        return waveform_np, sr
 
 
 class ASVspoof2019LADataset(Dataset):
-    def __init__(self, base_dir, split="train", use_vad=False, vad_mode=2, overlap_pct=0, chunk_samples=8000):
+    def __init__(
+        self,
+        base_dir,
+        split="train",
+        use_vad=False,
+        vad_mode=2,
+        overlap_pct=0,
+        chunk_samples=8000,
+    ):
         """
         Args:
             base_dir (str):     Path to the root 'ASVspoof2019_LA' directory.
@@ -33,15 +53,15 @@ class ASVspoof2019LADataset(Dataset):
         # }
 
         split_map = {
-            "train": ("ASVspoof2019_LA_train/flac", "ASVspoof2019.LA.cm.train.trn.txt"),
-            "dev":   ("ASVspoof2019_LA_dev/flac",   "ASVspoof2019.LA.cm.dev.trl.txt"),
-            "eval":  ("ASVspoof2019_LA_eval/flac",  "ASVspoof2019.LA.cm.eval.trl.txt"),
+            "train": ("augmented/train/flac", "ASVspoof2019.LA.cm.train.augmented.txt"),
+            "dev":   ("augmented/dev/flac",   "ASVspoof2019.LA.cm.dev.augmented.txt"),
+            "eval":  ("ASVspoof2019_LA_eval/flac", "ASVspoof2019.LA.cm.eval.trl.txt"),
         }
 
         audio_dir_name, protocol_name = split_map[split]
         # self.audio_dir = os.path.join("../output/", audio_dir_name)
         self.audio_dir = os.path.join(base_dir, audio_dir_name)
-        protocol_path = os.path.join(base_dir, "ASVspoof2019_LA_cm_protocols", protocol_name)
+        protocol_path = os.path.join(base_dir, "augmented/keys", protocol_name)
         self.label_map = {"bonafide": 0, "spoof": 1}
 
         # Parse protocol file
@@ -50,10 +70,12 @@ class ASVspoof2019LADataset(Dataset):
             for line in f:
                 parts = line.strip().split()
                 if len(parts) >= 5:
-                    raw_data.append({
-                        "path": os.path.join(self.audio_dir, f"{parts[1]}.flac"),
-                        "label": self.label_map[parts[4]],
-                    })
+                    raw_data.append(
+                        {
+                            "path": os.path.join(self.audio_dir, f"{parts[1]}.flac"),
+                            "label": self.label_map[parts[4]],
+                        }
+                    )
 
         # Pre-load all audio into memory during __init__ so __getitem__ never
         # touches disk. Stored as a dict: path -> list[np.ndarray] | None.
@@ -63,12 +85,12 @@ class ASVspoof2019LADataset(Dataset):
         self._chunk_cache: dict[str, list[np.ndarray] | None] = {}
         self.samples: list[tuple[str, int, int]] = []
 
-        for item in raw_data:
+        for item in tqdm(raw_data, desc=f"Loading {split}", unit="file"):
             path = item["path"]
             utt_id, chunks = self._load_chunks(path)
             # _load_chunks writes to _chunk_cache internally (success + failure)
             if chunks is None:
-                print(f"[SKIPPED] {utt_id}: failed to load or produced no chunks")
+                tqdm.write(f"[SKIPPED] {utt_id}: failed to load or produced no chunks")
                 continue
             for i in range(len(chunks)):
                 self.samples.append((path, item["label"], i))
@@ -92,7 +114,7 @@ class ASVspoof2019LADataset(Dataset):
             return utt_id, self._chunk_cache[path]
 
         try:
-            waveform_np, sr = sf.read(path)
+            waveform_np, sr = _read_audio(path)
 
             # 1. Force mono
             if waveform_np.ndim > 1:
@@ -129,7 +151,7 @@ class ASVspoof2019LADataset(Dataset):
             return utt_id, chunks
 
         except Exception as e:
-            print(f"[ERROR] {utt_id}: {type(e).__name__}: {e}", flush=True)
+            tqdm.write(f"[ERROR] {utt_id}: {type(e).__name__}: {e}")
             self._chunk_cache[path] = None
             return utt_id, None
 
