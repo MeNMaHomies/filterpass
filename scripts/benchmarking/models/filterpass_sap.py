@@ -15,7 +15,7 @@ from duy_scripts.classifiers.model_SAP import SAPClassifier
 from ..base.model_base import BenchmarkModel
 
 _HF_REPO = "Menmahomies/SAP_Classifier"
-_HF_FILE = "best_model_SAP.pt"
+_HF_FILE = "best_model_SAP_v4.pt"
 
 # Index 0 = bonafide, index 1 = spoof — verify against training label convention
 _BONAFIDE_IDX = 0
