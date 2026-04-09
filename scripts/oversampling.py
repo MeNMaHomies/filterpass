@@ -1,9 +1,13 @@
 import os
-import random
+import shutil
+import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from tqdm import tqdm
 
-from scripts.data_augmentation.pipeline import augment_file
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from scripts.data_augmentation.pipeline import augment_bonafide, augment_spoof
 from scripts.data_augmentation.presets import (
     full,
     headset,
@@ -15,11 +19,101 @@ from scripts.data_augmentation.presets import (
     voip,
 )
 
+# Presets always applied to every bonafide file (telephony-domain coverage)
+GUARANTEED_PRESETS = [
+    ("telephony", telephony),
+    ("pstn", pstn),
+    ("voip", voip),
+]
 
-def separate_data(input_file):
+# Presets sampled stochastically — each file gets a different draw (with replacement)
+STOCHASTIC_POOL = [
+    ("light", light),
+    ("full", full),
+    ("meeting_room", meeting_room),
+    ("noisy_mobile", noisy_mobile),
+    ("headset", headset),
+]
+
+# 1 original + 3 guaranteed + N stochastic = 9 copies per bonafide file
+N_STOCHASTIC = len(STOCHASTIC_POOL)
+
+
+def _process_bonafide_file(args: tuple) -> tuple[list, list]:
     """
-    Reads the ASVspoof protocol file, separates rows into bonafide and spoof,
-    and returns them as in-memory lists.
+    Worker target for ProcessPoolExecutor — must be a module-level function to be picklable.
+
+    Copies the original file verbatim, then delegates all augmentation to augment_bonafide.
+    The original copy is always included so the model trains on clean speech as well.
+    Protocol rows for every output file (original + augmented) are returned so the caller
+    can build the augmented protocol without any shared state across workers.
+    """
+    parts, audio_dir, output_dir, extension = args
+
+    audio_id = parts[1]
+    input_path = os.path.join(audio_dir, audio_id + extension)
+
+    if not os.path.exists(input_path):
+        return [], [f"Missing: {input_path}"]
+
+    rows = []
+    errors = []
+
+    orig_out = os.path.join(output_dir, audio_id + extension)
+    if not os.path.exists(orig_out):
+        shutil.copy2(input_path, orig_out)
+    rows.append(parts)
+
+    aug_results, aug_errors = augment_bonafide(
+        input_path,
+        output_dir,
+        audio_id,
+        GUARANTEED_PRESETS,
+        STOCHASTIC_POOL,
+        N_STOCHASTIC,
+        extension,
+    )
+    errors.extend(aug_errors)
+    for aug_id, _ in aug_results:
+        # Preserve all protocol fields; only the utterance ID (index 1) changes.
+        rows.append([parts[0], aug_id] + parts[2:])
+
+    return rows, errors
+
+
+def _process_spoof_file(args: tuple) -> tuple[list | None, str | None]:
+    """
+    Worker target for ProcessPoolExecutor — must be a module-level function to be picklable.
+
+    Applies a single randomly drawn preset in-place (no duplication). Spoof files are not
+    oversampled — augmentation here only ensures they go through the same channel distortion
+    domain as the bonafide files, preventing a clean/degraded distribution mismatch.
+    """
+    parts, audio_dir, output_dir, extension = args
+
+    audio_id = parts[1]
+    input_path = os.path.join(audio_dir, audio_id + extension)
+    output_path = os.path.join(output_dir, audio_id + extension)
+
+    if not os.path.exists(input_path):
+        return None, f"Missing: {input_path}"
+
+    if os.path.exists(output_path):
+        return parts, None
+
+    try:
+        augment_spoof(input_path, output_path, GUARANTEED_PRESETS + STOCHASTIC_POOL)
+        return parts, None
+    except Exception as e:
+        return None, f"Failed {audio_id}: {e}"
+
+
+def separate_data(input_file: str) -> tuple[list, list]:
+    """
+    Parses an ASVspoof protocol file and splits rows by label.
+
+    Each row is returned as a list of whitespace-split tokens (the raw protocol columns),
+    preserving the original field order for downstream protocol writing.
     """
     bonafide_data = []
     spoof_data = []
@@ -30,9 +124,7 @@ def separate_data(input_file):
                 parts = line.strip().split()
                 if not parts:
                     continue
-
                 label = parts[-1].lower()
-
                 if label == "bonafide":
                     bonafide_data.append(parts)
                 elif label == "spoof":
@@ -49,97 +141,77 @@ def separate_data(input_file):
         return [], []
 
 
-_PRESETS = [
-    ("telephony", telephony),
-    ("pstn", pstn),
-    ("voip", voip),
-    ("light", light),
-    ("full", full),
-    ("meeting_room", meeting_room),
-    ("noisy_mobile", noisy_mobile),
-    ("headset", headset),
-]
-
-
 def oversample_bonafide(
     bonafide_list: list,
     audio_dir: str,
     output_dir: str,
     extension: str = ".flac",
+    max_workers: int | None = None,
 ) -> list:
     """
-    For each bonafide utterance:
-      - Copies the original clean file to output_dir unchanged.
-      - Generates one augmented copy per preset in _PRESETS.
-    Returns protocol rows for all files (original + augmented).
+    Expands the bonafide set by generating augmented copies of every utterance in parallel.
+
+    Each file produces 1 original + N augmented versions (see GUARANTEED_PRESETS,
+    STOCHASTIC_POOL, N_STOCHASTIC). Existing files are skipped, so interrupted runs
+    can be safely resumed without re-processing completed files.
+
+    Returns a flat list of protocol rows covering all output files.
     """
     os.makedirs(output_dir, exist_ok=True)
+
+    valid = [p for p in bonafide_list if len(p) >= 2]
+    args = [(p, audio_dir, output_dir, extension) for p in valid]
+
     new_rows = []
+    workers = max_workers or os.cpu_count()
 
-    import shutil
-
-    for parts in tqdm(bonafide_list, desc="Bonafide oversampling"):
-        if len(parts) < 2:
-            continue
-
-        audio_id = parts[1]
-        input_path = os.path.join(audio_dir, audio_id + extension)
-
-        if not os.path.exists(input_path):
-            tqdm.write(f"Missing: {input_path}")
-            continue
-
-        # Original clean copy
-        shutil.copy2(input_path, os.path.join(output_dir, audio_id + extension))
-        new_rows.append(parts)
-
-        # One augmented copy per preset
-        for preset_name, preset_fn in _PRESETS:
-            aug_id = f"{audio_id}_{preset_name}"
-            output_path = os.path.join(output_dir, aug_id + extension)
-            try:
-                augment_file(input_path, output_path, preset_fn())
-                aug_row = parts[:-1] + [aug_id] + [parts[-1]]
-                new_rows.append(aug_row)
-            except Exception as e:
-                tqdm.write(f"Failed {audio_id} with {preset_name}: {e}")
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(_process_bonafide_file, a): a for a in args}
+        for future in tqdm(
+            as_completed(futures), total=len(futures), desc="Bonafide oversampling"
+        ):
+            rows, errors = future.result()
+            new_rows.extend(rows)
+            for err in errors:
+                tqdm.write(err)
 
     print(f"\nBonafide complete: {len(new_rows)} total files (original + augmented).")
     return new_rows
 
 
-def augment_spoof(
+def augment_spoof_batch(
     spoof_list: list,
     audio_dir: str,
     output_dir: str,
     extension: str = ".flac",
+    max_workers: int | None = None,
 ) -> list:
     """
-    For each spoof utterance, apply a randomly sampled preset in-place
-    (no duplication — one augmented file replaces the original).
-    Returns protocol rows with the same IDs (output dir changes, not filenames).
+    Applies a random augmentation preset to every spoof utterance in parallel.
+
+    One augmented file replaces the original — spoof files are not duplicated.
+    Existing output files are skipped for resumability.
+
+    Returns protocol rows with the same IDs as the input (no new entries are created).
     """
     os.makedirs(output_dir, exist_ok=True)
+
+    valid = [p for p in spoof_list if len(p) >= 2]
+    args = [(p, audio_dir, output_dir, extension) for p in valid]
+
     rows = []
+    workers = max_workers or os.cpu_count()
 
-    for parts in tqdm(spoof_list, desc="Spoof augmentation"):
-        if len(parts) < 2:
-            continue
-
-        audio_id = parts[1]
-        input_path = os.path.join(audio_dir, audio_id + extension)
-        output_path = os.path.join(output_dir, audio_id + extension)
-
-        if not os.path.exists(input_path):
-            tqdm.write(f"Missing: {input_path}")
-            continue
-
-        _, preset_fn = random.choice(_PRESETS)
-        try:
-            augment_file(input_path, output_path, preset_fn())
-            rows.append(parts)
-        except Exception as e:
-            tqdm.write(f"Failed {audio_id}: {e}")
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(_process_spoof_file, a): a for a in args}
+        for future in tqdm(
+            as_completed(futures), total=len(futures), desc="Spoof augmentation"
+        ):
+            result, error = future.result()
+            if result is not None:
+                rows.append(result)
+            if error:
+                tqdm.write(error)
 
     print(f"Spoof complete: {len(rows)} files augmented in-place.")
     return rows
@@ -150,7 +222,7 @@ def write_augmented_protocol(
     spoof_rows: list,
     output_path: str,
 ) -> None:
-    """Write a merged protocol file containing bonafide + spoof rows."""
+    """Merges bonafide and spoof rows and writes them to a single protocol file."""
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     all_rows = bonafide_rows + spoof_rows
     with open(output_path, "w") as f:
@@ -162,7 +234,7 @@ def write_augmented_protocol(
 if __name__ == "__main__":
     protocol_path = "./data_training/keys/ASVspoof2019.LA.cm.train.trn.txt"
     audio_folder_path = "./data_training/ASVspoof2019_LA_train/flac"
-    augmented_audio_dir = "./data_training/augmented/flac"
+    augmented_audio_dir = "./data_training/augmented/train/flac"
     augmented_protocol_path = (
         "./data_training/augmented/keys/ASVspoof2019.LA.cm.train.augmented.txt"
     )
@@ -175,7 +247,7 @@ if __name__ == "__main__":
         output_dir=augmented_audio_dir,
     )
 
-    spoof_rows = augment_spoof(
+    spoof_rows = augment_spoof_batch(
         spoof_list,
         audio_dir=audio_folder_path,
         output_dir=augmented_audio_dir,

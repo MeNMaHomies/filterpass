@@ -13,4 +13,4 @@ output*
 output_*
 LA*
 checkpoints*
-augmented*
+augmented**.pt
