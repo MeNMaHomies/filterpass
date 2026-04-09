@@ -3,8 +3,7 @@ clearml.conf
 context
 .claude
 CLAUDE.md
-data
-data_*
+data*
 ASVspoof2021_LA_eval
 .vscode
 __pycache__
@@ -14,3 +13,4 @@ output*
 output_*
 LA*
 checkpoints*
+augmented**.pt

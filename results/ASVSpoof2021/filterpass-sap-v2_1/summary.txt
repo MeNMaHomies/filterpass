@@ -1,0 +1,34 @@
+Model:            Filterpass-SAP (Wav2Vec2-base + Self-Attention Pooling)
+Dataset:          ASVspoof 2021 LA (phase=eval)
+Scored:           148176 utterances
+Skipped:          0 utterances
+
+--- Model ---
+Parameters:       94,766,211
+VRAM (load):      0.71 GB
+VRAM (peak):      0.71 GB
+
+--- Anti-Spoofing ---
+EER:              30.42%
+min-tDCF:         0.7551
+AUC-ROC:          0.7678
+FAR (@ EER thr):  30.42%
+FRR (@ EER thr):  30.42%
+
+--- Classification (@ EER threshold) ---
+Accuracy:         69.58%
+Precision:        0.2026
+Recall:           0.6958
+F1:               0.3138
+
+--- Per-Condition EER ---
+  notrim: 30.42%
+
+--- Real-Time Performance (no VAD, per 500ms chunk) ---
+RTF mean:         0.0016
+RTF median:       0.0016
+RTF p95:          0.0023
+RTF max:          0.0098
+Latency mean:     0.8 ms
+Latency median:   0.8 ms
+Latency p95:      1.1 ms

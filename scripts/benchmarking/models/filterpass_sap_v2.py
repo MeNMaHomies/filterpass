@@ -8,21 +8,20 @@ Fill in _HF_REPO and _HF_FILE before running.
 """
 
 import torch
-from huggingface_hub import hf_hub_download
 
 from duy_scripts.classifiers.model_SAP import SAPClassifier
 
 from ..base.model_base import BenchmarkModel
 
-_HF_REPO = "Menmahomies/SAP_Classifier"
-_HF_FILE = "best_model_SAP_v4.pt"
+# _HF_REPO = "Menmahomies/SAP_Classifier"
+# _HF_FILE = "best_model_SAP_v3.pt"
 
 # Index 0 = bonafide, index 1 = spoof — verify against training label convention
 _BONAFIDE_IDX = 0
 
 
 # ── Adapter ───────────────────────────────────────────────────────────────────
-class FilterpassSAP(BenchmarkModel):
+class FilterpassSAPv2(BenchmarkModel):
     def __init__(
         self, model_name: str = "facebook/wav2vec2-base", freeze_extractor: bool = True
     ):
@@ -32,15 +31,15 @@ class FilterpassSAP(BenchmarkModel):
 
     @property
     def name(self) -> str:
-        return "Filterpass-SAP (Wav2Vec2-base + Self-Attention Pooling)"
+        return "Filterpass-SAP (Wav2Vec2-base + Self-Attention Pooling) v2.0"
 
     def load(self, device: torch.device) -> None:
-        print("Locating weights from Hugging Face...")
-        weights_path = hf_hub_download(repo_id=_HF_REPO, filename=_HF_FILE)
-        print(f"Weights at: {weights_path}")
+        weights_path = "./checkpoints/best_model_SAP.pt"
+        print(f"Loading weights from {weights_path}")
 
         model = SAPClassifier(self._model_name, self._freeze_extractor)
-        model.load_state_dict(torch.load(weights_path, map_location=device))
+        state_dict = torch.load(weights_path, map_location=device, weights_only=True)
+        model.load_state_dict(state_dict)
         model.to(device)
         model.eval()
 

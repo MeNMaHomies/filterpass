@@ -15,8 +15,8 @@ _SPLIT_MAP = {
         "augmented/keys/ASVspoof2019.LA.cm.train.augmented.txt",
     ),
     "dev": (
-        "augmented/dev/flac",
-        "augmented/keys/ASVspoof2019.LA.cm.dev.augmented.txt",
+        "ASVspoof2019_LA_dev/flac",
+        "keys/ASVspoof2019.LA.cm.dev.trl.txt",
     ),
     "eval": ("ASVspoof2019_LA_eval/flac", "keys/ASVspoof2019.LA.cm.eval.trl.txt"),
 }
@@ -98,7 +98,11 @@ class ASVspoofDataset(Dataset):
             path = os.path.join(self.audio_dir, f"{utt_id}.flac")
             self.samples.append((path, label))
 
-        cache_status = f"cache at {cache_dir}" if self.cache_dir else "no cache (run cache_dataset.py)"
+        cache_status = (
+            f"cache at {cache_dir}"
+            if self.cache_dir
+            else "no cache (run cache_dataset.py)"
+        )
         print(
             f"{split}: {len(self.samples)} utterances indexed  |  "
             f"{skipped} skipped  |  {cache_status}"

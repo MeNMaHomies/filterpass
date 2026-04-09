@@ -129,7 +129,8 @@ def train(
     from tqdm import tqdm
 
     os.makedirs(CONFIG["checkpoint_dir"], exist_ok=True)
-    checkpoint_path = os.path.join(CONFIG["checkpoint_dir"], CONFIG["checkpoint_name"])
+    checkpoint_path  = os.path.join(CONFIG["checkpoint_dir"], CONFIG["checkpoint_name"])
+    history_plot_path = os.path.join(CONFIG["checkpoint_dir"], "training_history.png")
 
     best_eer = float("inf")
     patience_counter = 0
@@ -195,17 +196,26 @@ def train(
             f"Dev EER: {dev_eer * 100:.2f}%"
         )
 
+        improvement = best_eer - dev_eer
         if dev_eer < best_eer:
             best_eer = dev_eer
-            patience_counter = 0
             torch.save(model.state_dict(), checkpoint_path)
             print(f"  New best EER — model saved to {checkpoint_path}")
+
+        if improvement >= CONFIG["min_delta"]:
+            patience_counter = 0
         else:
             patience_counter += 1
-            print(f"  No improvement. Patience: {patience_counter}/{CONFIG['patience']}")
+            print(
+                f"  Marginal gain ({improvement * 100:.3f}pp). "
+                f"Patience: {patience_counter}/{CONFIG['patience']}"
+            )
             if patience_counter >= CONFIG["patience"]:
-                print(f"  Early stopping at epoch {epoch + 1}.")
+                print(f"  Early stopping at epoch {epoch + 1} — gains below min_delta.")
+                plot_training_history(history, save_path=history_plot_path)
                 break
+
+        plot_training_history(history, save_path=history_plot_path)
 
     return history
 
@@ -232,8 +242,7 @@ def plot_training_history(history: dict, save_path: str | None = None) -> None:
     plt.tight_layout()
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches="tight")
-        print(f"Training history saved to {save_path}")
-    plt.show()
+    plt.close(fig)
 
 
 if __name__ == "__main__":
@@ -248,11 +257,6 @@ if __name__ == "__main__":
     model, optimizer, scheduler, loss_fn, scaler = build_model_and_optimiser(train_loader)
 
     history = train(model, train_loader, dev_loader, optimizer, scheduler, loss_fn, scaler)
-
-    plot_training_history(
-        history,
-        save_path=os.path.join(CONFIG["checkpoint_dir"], "training_history.png"),
-    )
 
     # --- Evaluation on eval set ---
     # eval_dataset = ASVspoofDataset(CONFIG["base_dir"], split="eval")

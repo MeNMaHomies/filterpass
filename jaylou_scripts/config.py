@@ -11,9 +11,12 @@ CONFIG = {
     "checkpoint_name": "best_model_SAP.pt",
     "model": SAPClassifier,
     # Training
-    "batch_size": 32,  # increase if GPU OOMs, decrease to 16
-    "max_epochs": 15,
-    "patience": 16,
+    "batch_size": 16,
+    "max_epochs": 25,
+    "patience": 5,
+    # Minimum EER drop (absolute) that counts as a meaningful improvement.
+    # Gains smaller than this increment the patience counter even if EER technically improved.
+    "min_delta": 0.001,  # 0.1 percentage points
     # Gradient accumulation — effective batch = batch_size * grad_accum_steps.
     # Set to 1 to disable. Useful when batch_size is limited by GPU memory.
     "grad_accum_steps": 1,
@@ -28,16 +31,17 @@ CONFIG = {
     # symmetric. Revert to [9.0, 1.0] if training without the augmented set.
     "class_weights": [1.0, 1.0],
     # DataLoader
-    # 14 physical / 20 logical cores. Workers are I/O-bound (.npy cache loads),
-    # but Windows spawn overhead caps the benefit — 10 is the sweet spot.
-    "num_workers": 10,
-    "prefetch_factor": 4,  # batches queued per worker (10×4 = 40 batches ahead)
+    # num_workers=0 outperforms multi-worker loading on Windows because .npy cache
+    # loads are fast enough for the main process to keep the GPU fed, and Windows
+    # spawn overhead (full interpreter per worker) costs more than the parallelism saves.
+    "num_workers": 0,
+    "prefetch_factor": 4,  # only active when num_workers > 0
     # Encoder layer freezing — freeze the bottom N transformer blocks.
     # wav2vec2-base has 12 transformer layers.
-    # RTX 4050 has 6 GB VRAM: freeze 8 to keep only the top 4 trainable.
-    # This cuts ~65% of backward-pass cost and reduces activation VRAM substantially.
+    # 8 = freeze layers 0–7, train only top 4 — faster backward, less adaptation.
+    # 6 = freeze layers 0–5, train layers 6–11 — more adaptation, slower.
     # Set to 0 to train all layers (requires gradient_checkpointing=True to fit in 6 GB).
-    "freeze_encoder_layers": 6,
+    "freeze_encoder_layers": 8,
     # Gradient checkpointing — recompute activations on backward instead of storing them.
     # Cuts activation VRAM ~40% at the cost of a ~15% slower backward pass.
     # Required to fit batch_size=32 through unfrozen Wav2Vec2 layers on 6 GB.
