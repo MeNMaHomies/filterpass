@@ -25,7 +25,7 @@ class ASVspoof2019LADataset(Dataset):
         split_map = {
             "train": ("train/flac", "train/keys/ASVspoof2019.LA.cm.train.augmented.txt"),
             "dev":   ("ASVspoof2019_LA_dev/flac",   "ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.dev.trl.txt"),
-            "eval":  ("ASVspoof2019_LA_eval/flac",  "ASVspoof2019.LA.cm.eval.trl.txt"),
+            "eval":  ("ASVspoof2019_LA_eval/flac",  "ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.eval.trl.txt"),
         }
 
         audio_dir_name, protocol_name = split_map[split]
