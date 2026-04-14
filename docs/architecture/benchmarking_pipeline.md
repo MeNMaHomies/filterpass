@@ -277,6 +277,57 @@ sequenceDiagram
 
 ---
 
+## CLI Reference
+
+All flags are passed to `python -m scripts.benchmarking`. Flags marked **required** have no default and must be supplied on every run.
+
+### Required
+
+| Flag | Type | Description |
+|---|---|---|
+| `--model` | `str` | Model adapter to run. Must match a key in `models/__init__.py` REGISTRY. Current values: `xlsr-mamba`, `wav2vec2-aasist`, `xlsr-sls`, `filterpass-sap`, `filterpass-sap-v2`. |
+| `--dataset` | `str` | Dataset adapter to use. Must match a key in `datasets/__init__.py` REGISTRY. Current values: `asvspoof2021-la`. |
+| `--eval_dir` | `path` | Directory containing the evaluation audio files (`.flac`). Passed directly to the dataset adapter. Relative paths are resolved from the repo root. |
+
+### Core Options
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--keys_dir` | `path` | `None` | Dataset key/metadata directory. Required by ASVspoof 2021 LA (CM protocol keys). Pass the `data/keys/LA` directory. |
+| `--out_dir` | `path` | `results/<model>-<dataset>` | Output directory for `scores.txt`, `skipped.txt`, and `summary.txt`. Created automatically if it does not exist. |
+| `--phase` | `str` | `eval` | Dataset partition to evaluate. Passed to `DatasetAdapter.load_trials()`. ASVspoof 2021 LA only has `eval`. |
+| `--batch_size` | `int` | `32` | Number of chunks per GPU mini-batch in chunked mode. Has no effect in static mode (one utterance per forward pass). Increase for throughput on high-VRAM GPUs; decrease if VRAM is tight. |
+| `--num_workers` | `int` | `4` | Number of DataLoader worker processes for parallel audio loading. Higher values reduce loader bottleneck on fast storage. Set to `0` for debugging (synchronous loading). |
+
+### Inference Mode
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--chunk_ms` | `int` | `500` | Chunk duration in milliseconds. Converts to samples as `chunk_ms × 16000 / 1000`. Default 500ms = 8000 samples. Ignored when `--static` is set. |
+| `--static` | `flag` | off | Full-utterance static mode. No chunking — each file is a single variable-length forward pass. Matches the evaluation protocol used in published SOTA papers. Overrides `--chunk_ms`. |
+
+### Model-Specific
+
+These flags are silently ignored by adapters that do not use them.
+
+| Flag | Type | Default | Used by | Description |
+|---|---|---|---|---|
+| `--repo_path` | `path` | Model-specific default | All external-repo models | Path to the model's external code checkout. Added to `sys.path` at load time. Defaults to `../XLSR-Mamba`, `../SSL_Anti-spoofing`, or `../SLSforASVspoof-2021-DF` relative to the repo root depending on the model. |
+| `--weights_path` | `path` | `None` | `wav2vec2-aasist`, `xlsr-sls` | Path to fine-tuned checkpoint (`.pth` / `.pt`). **Required** for these models — the run will exit with an error if omitted. |
+| `--xlsr_dir` | `path` | `--repo_path` value | `wav2vec2-aasist`, `xlsr-sls` | Directory containing `xlsr2_300m.pt`. The adapter temporarily `chdir`s here during model construction because the upstream `model.py` hardcodes a relative `cp_path`. Defaults to the repo root if not set. |
+| `--emb_size` | `int` | `144` | `xlsr-mamba` | Mamba embedding dimension. Must match the value used during training. |
+| `--num_encoders` | `int` | `12` | `xlsr-mamba` | Number of Mamba encoder blocks. Must match the value used during training. |
+
+### VAD and Overlap
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--use_vad` | `flag` | off | Enable WebRTC VAD silence filtering before chunking. Non-speech 30ms frames are discarded. Applies in both chunked and static modes. Follows the CLAUDE.md mandate: VAD must be active for all production benchmark runs. |
+| `--vad_mode` | `int` (0–3) | `2` | WebRTC VAD aggressiveness. `0` = least aggressive (accepts more speech, misses some silence). `3` = most aggressive (rejects more noise, risks clipping soft speech). Only active when `--use_vad` is set. |
+| `--overlap` | `int` (0–99) | `0` | Sliding-window overlap percentage. `0` = non-overlapping (default). `80` = 80% overlap, hop = 20% of chunk duration. Higher overlap increases the number of forward passes per utterance but provides denser temporal coverage. Chunked mode only. |
+
+---
+
 ## Sample Usage
 
 ### Chunked mode (streaming emulation)

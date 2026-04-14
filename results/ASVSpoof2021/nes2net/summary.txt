@@ -1,0 +1,34 @@
+Model:            Nes2Net (Liu et al. 2025)
+Dataset:          ASVspoof 2021 LA (phase=eval)
+Scored:           148176 utterances
+Skipped:          0 utterances
+
+--- Model ---
+Parameters:       317,902,631
+VRAM (load):      2.37 GB
+VRAM (peak):      2.37 GB
+
+--- Anti-Spoofing ---
+EER:              6.40%
+min-tDCF:         0.3247
+AUC-ROC:          0.9857
+FAR (@ EER thr):  6.40%
+FRR (@ EER thr):  6.40%
+
+--- Classification (@ EER threshold) ---
+Accuracy:         93.60%
+Precision:        0.6191
+Recall:           0.9360
+F1:               0.7452
+
+--- Per-Condition EER ---
+  notrim: 6.40%
+
+--- Real-Time Performance (per 500ms chunk) ---
+RTF mean:         0.0071
+RTF median:       0.0068
+RTF p95:          0.0114
+RTF max:          0.0314
+Latency mean:     3.5 ms
+Latency median:   3.4 ms
+Latency p95:      5.7 ms

@@ -164,6 +164,26 @@ def _build_model(args):
             sys.exit(1)
         kwargs["weights_path"] = _abs(args.weights_path)
         kwargs["xlsr_dir"] = _abs(args.xlsr_dir) if args.xlsr_dir else FILTERPASS_DIR
+    elif args.model == "xlsr-sls":
+        kwargs["repo_path"] = args.repo_path or os.path.normpath(
+            os.path.join(FILTERPASS_DIR, "..", "SLSforASVspoof-2021-DF")
+        )
+        if not args.weights_path:
+            import sys
+            print("ERROR: --weights_path required for xlsr-sls", file=sys.stderr)
+            sys.exit(1)
+        kwargs["weights_path"] = _abs(args.weights_path)
+        kwargs["xlsr_dir"] = _abs(args.xlsr_dir) if args.xlsr_dir else FILTERPASS_DIR
+    elif args.model == "nes2net":
+        kwargs["repo_path"] = args.repo_path or os.path.normpath(
+            os.path.join(FILTERPASS_DIR, "..", "Nes2Net_ASVspoof_ITW")
+        )
+        if not args.weights_path:
+            import sys
+            print("ERROR: --weights_path required for nes2net", file=sys.stderr)
+            sys.exit(1)
+        kwargs["weights_path"] = _abs(args.weights_path)
+        kwargs["xlsr_dir"] = _abs(args.xlsr_dir) if args.xlsr_dir else FILTERPASS_DIR
     elif args.repo_path:
         kwargs["repo_path"] = args.repo_path
 

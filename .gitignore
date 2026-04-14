@@ -13,5 +13,4 @@ output*
 output_*
 LA*
 checkpoints*
-**.pt
-.pt
+models/
