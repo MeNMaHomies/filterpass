@@ -9,6 +9,8 @@ Supports two modes:
 Both modes support an optional overlapping sliding window via overlap_pct.
 """
 
+from __future__ import annotations
+
 import os
 
 import numpy as np
@@ -244,11 +246,16 @@ def build_loader(
 ) -> DataLoader:
     hop_samples = max(1, int(chunk_samples * (1 - overlap_pct / 100)))
 
-    return DataLoader(
-        UtteranceDataset(flac_paths, use_vad, vad_mode, hop_samples, chunk_samples, normalize, static),
+    loader_kwargs = dict(
         batch_size=1,
         num_workers=num_workers,
         collate_fn=_collate,
-        prefetch_factor=2 if num_workers > 0 else None,
         persistent_workers=num_workers > 0,
+    )
+    if num_workers > 0:
+        loader_kwargs["prefetch_factor"] = 2
+
+    return DataLoader(
+        UtteranceDataset(flac_paths, use_vad, vad_mode, hop_samples, chunk_samples, normalize, static),
+        **loader_kwargs,
     )

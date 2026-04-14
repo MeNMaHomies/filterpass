@@ -7,9 +7,9 @@ Weights are loaded from a local .pt state_dict file (state_dict only, not full m
 Fill in _HF_REPO and _HF_FILE before running.
 """
 
-import torch
+from __future__ import annotations
 
-from duy_scripts.classifiers.model_SAP import SAPClassifier
+import torch
 
 from ..base.model_base import BenchmarkModel
 
@@ -34,6 +34,8 @@ class FilterpassSAPv2(BenchmarkModel):
         return "Filterpass-SAP (Wav2Vec2-base + Self-Attention Pooling) v2.0"
 
     def load(self, device: torch.device) -> None:
+        from duy_scripts.classifiers.model_SAP import SAPClassifier  # noqa: PLC0415
+
         weights_path = "./checkpoints/best_model_SAP.pt"
         print(f"Loading weights from {weights_path}")
 

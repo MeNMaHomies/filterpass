@@ -6,6 +6,8 @@ EER delegates to eval_metrics.compute_eer (official ASVspoof DET-curve method).
 Dataset-specific metrics (e.g. min-tDCF) are handled by DatasetAdapter.extra_metrics.
 """
 
+from __future__ import annotations
+
 import numpy as np
 from sklearn.metrics import (
     accuracy_score,

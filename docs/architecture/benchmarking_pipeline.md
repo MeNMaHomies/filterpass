@@ -297,6 +297,10 @@ python -m scripts.benchmarking \
 python -m scripts.benchmarking \
     --model filterpass-sap-v4 ... --chunk_ms 1000
 
+# No chunking, No vad
+python -m scripts.benchmarking \
+    --model filterpass-sap-v4 ... --static
+
 # VAD-filtered chunking with 80% overlap
 python -m scripts.benchmarking \
     --model xlsr-mamba ... --use_vad --vad_mode 2 --overlap 80

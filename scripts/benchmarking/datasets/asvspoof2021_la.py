@@ -13,6 +13,8 @@ Column layout of trial_metadata.txt (space-separated, no header):
     0: speaker_id  1: utt_id  2: ?  3: ?  4: ?  5: label  6: condition  7: phase
 """
 
+from __future__ import annotations
+
 import os
 import sys
 

@@ -13,6 +13,8 @@ The upstream model.py hardcodes `cp_path = 'xlsr2_300m.pt'` (relative CWD lookup
 so we temporarily chdir to `xlsr_dir` during construction.
 """
 
+from __future__ import annotations
+
 import argparse
 import os
 import sys
@@ -36,7 +38,7 @@ class SSLAntiSpoofing(BenchmarkModel):
 
     @property
     def name(self) -> str:
-        return "SSL-Anti-Spoofing (Tak et al. 2022, wav2vec2-AASIST)"
+        return "Wav2Vec2-AASIST (Tak et al. 2022)"
 
     def load(self, device: torch.device) -> None:
         if self._repo_path not in sys.path:
@@ -51,7 +53,7 @@ class SSLAntiSpoofing(BenchmarkModel):
         finally:
             os.chdir(prev_dir)
 
-        state = torch.load(self._weights_path, map_location=device, weights_only=True)  # nosemgrep: python.lang.security.deserialization.avoid-pickle
+        state = torch.load(self._weights_path, map_location=device)
         model.load_state_dict(state)
         model.to(device)
         model.eval()

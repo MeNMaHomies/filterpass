@@ -1,0 +1,15 @@
+# Benchmarking pipeline dependencies
+# Install into whichever conda env you are running the benchmark from:
+#   pip install -r benchmark_requirements.txt
+#
+# Note: torch must already be installed in the env (version varies per model env).
+# Note: SSL_Spoofing env also requires fairseq (installed editorially from the repo).
+
+numpy
+soundfile
+tqdm
+scikit-learn
+pandas
+huggingface_hub
+safetensors
+webrtcvad   # only required when running with --use_vad

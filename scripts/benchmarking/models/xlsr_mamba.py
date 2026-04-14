@@ -11,8 +11,6 @@ import argparse
 import sys
 
 import torch
-from huggingface_hub import hf_hub_download
-from safetensors.torch import load_file
 
 from ..base.model_base import BenchmarkModel
 
@@ -44,6 +42,8 @@ class XLSRMamba(BenchmarkModel):
         if self._repo_path not in sys.path:
             sys.path.insert(0, self._repo_path)
 
+        from huggingface_hub import hf_hub_download  # noqa: PLC0415
+        from safetensors.torch import load_file  # noqa: PLC0415
         from model import Model  # noqa: PLC0415 — XLSR-Mamba repo import
 
         print("Locating weights from Hugging Face...")

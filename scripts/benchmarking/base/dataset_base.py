@@ -7,6 +7,8 @@ To add a new dataset:
   3. Register it in scripts/benchmarking/datasets/__init__.py
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 

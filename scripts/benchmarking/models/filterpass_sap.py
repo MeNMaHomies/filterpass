@@ -7,10 +7,9 @@ Weights are loaded from a local .pt state_dict file (state_dict only, not full m
 Fill in _HF_REPO and _HF_FILE before running.
 """
 
-import torch
-from huggingface_hub import hf_hub_download
+from __future__ import annotations
 
-from duy_scripts.classifiers.model_SAP import SAPClassifier
+import torch
 
 from ..base.model_base import BenchmarkModel
 
@@ -35,6 +34,9 @@ class FilterpassSAP(BenchmarkModel):
         return "Filterpass-SAP (Wav2Vec2-base + Self-Attention Pooling)"
 
     def load(self, device: torch.device) -> None:
+        from huggingface_hub import hf_hub_download  # noqa: PLC0415
+        from duy_scripts.classifiers.model_SAP import SAPClassifier  # noqa: PLC0415
+
         print("Locating weights from Hugging Face...")
         weights_path = hf_hub_download(repo_id=_HF_REPO, filename=_HF_FILE)
         print(f"Weights at: {weights_path}")

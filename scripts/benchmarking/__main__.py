@@ -83,7 +83,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--phase", default="eval")
     p.add_argument("--batch_size", type=int, default=32)
-    p.add_argument("--num_workers", type=int, default=8)
+    p.add_argument("--num_workers", type=int, default=4)
     p.add_argument(
         "--chunk_ms",
         type=int,
@@ -154,7 +154,7 @@ def _build_model(args):
         )
         kwargs["emb_size"] = args.emb_size
         kwargs["num_encoders"] = args.num_encoders
-    elif args.model == "ssl-anti-spoofing":
+    elif args.model == "wav2vec2-aasist":
         kwargs["repo_path"] = args.repo_path or os.path.normpath(
             os.path.join(FILTERPASS_DIR, "..", "SSL_Anti-spoofing")
         )
@@ -163,8 +163,7 @@ def _build_model(args):
             print("ERROR: --weights_path required for ssl-anti-spoofing", file=sys.stderr)
             sys.exit(1)
         kwargs["weights_path"] = _abs(args.weights_path)
-        if args.xlsr_dir:
-            kwargs["xlsr_dir"] = _abs(args.xlsr_dir)
+        kwargs["xlsr_dir"] = _abs(args.xlsr_dir) if args.xlsr_dir else FILTERPASS_DIR
     elif args.repo_path:
         kwargs["repo_path"] = args.repo_path
 

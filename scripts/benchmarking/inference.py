@@ -10,6 +10,8 @@ utilization even when individual utterances are short (e.g. 3-4 seconds →
 6-8 chunks, well below a typical batch_size of 32).
 """
 
+from __future__ import annotations
+
 import time
 from collections import defaultdict
 

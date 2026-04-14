@@ -8,6 +8,8 @@ To register a new dataset adapter:
 The CLI --dataset flag matches against REGISTRY keys.
 """
 
+from __future__ import annotations
+
 from .asvspoof2021_la import ASVspoof2021LA
 
 REGISTRY: dict[str, type] = {

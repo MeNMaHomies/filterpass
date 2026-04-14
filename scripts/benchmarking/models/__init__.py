@@ -8,6 +8,8 @@ To register a new model adapter:
 The CLI --model flag matches against REGISTRY keys.
 """
 
+from __future__ import annotations
+
 from .filterpass_sap import FilterpassSAP
 from .filterpass_sap_v2 import FilterpassSAPv2
 from .ssl_anti_spoofing import SSLAntiSpoofing
@@ -17,5 +19,5 @@ REGISTRY: dict[str, type] = {
     "xlsr-mamba": XLSRMamba,
     "filterpass-sap": FilterpassSAP,
     "filterpass-sap-v2": FilterpassSAPv2,
-    "ssl-anti-spoofing": SSLAntiSpoofing,
+    "wav2vec2-aasist": SSLAntiSpoofing,
 }
