@@ -18,7 +18,7 @@ import torch
 from tqdm import tqdm
 
 from .base.model_base import BenchmarkModel
-from .config import CHUNK_DURATION_S
+from .config import TARGET_SR
 
 
 def _flush(
@@ -28,6 +28,7 @@ def _flush(
     owner_buffer: list[str],
     chunk_scores: dict[str, list[float]],
     all_rtf: list[float],
+    chunk_duration_s: float,
 ) -> None:
     """Run one GPU forward pass on whatever is currently in the buffer."""
     if not chunk_buffer:
@@ -38,7 +39,7 @@ def _flush(
     t0 = time.perf_counter()
     scores = model.predict(batch)
     elapsed = time.perf_counter() - t0
-    all_rtf.append(elapsed / (n * CHUNK_DURATION_S))
+    all_rtf.append(elapsed / (n * chunk_duration_s))
 
     for utt_id, score in zip(owner_buffer, scores.cpu().numpy().tolist()):
         chunk_scores[utt_id].append(score)
@@ -52,68 +53,94 @@ def run_inference(
     loader,
     device: torch.device,
     batch_size: int,
+    chunk_ms: int = 500,
+    static: bool = False,
 ) -> tuple[dict[str, float], list[float], list[str]]:
     """
-    Iterate over `loader`, buffer chunks across utterances into full
-    `batch_size` GPU batches, then aggregate per-utterance scores as the
-    mean bonafide score across all chunks.
+    Chunked mode: buffers chunks across utterances into batch_size GPU batches,
+    aggregates per-utterance scores via mean pooling across chunks.
+
+    Static mode: one forward pass per file on the full audio (variable length,
+    no batching across utterances). RTF is measured per utterance duration.
 
     Returns:
         all_scores  — {utt_id: mean_score}
-        all_rtf     — list of per-batch RTF values
+        all_rtf     — list of RTF values (per batch in chunked, per utterance in static)
         skipped_ids — list of utt_ids that could not be loaded
     """
     all_rtf: list[float] = []
     skipped_ids: list[str] = []
-    chunk_scores: dict[str, list[float]] = defaultdict(list)
+    all_scores: dict[str, float] = {}
 
-    # GPU warmup: trigger CUDA kernel compilation before timed inference begins
-    # so the first real batch doesn't inflate rtf_mean/rtf_max.
     if device.type == "cuda":
         print("Warming up GPU...", flush=True)
-        dummy = torch.zeros(batch_size, 8000, device=device)
+        warmup_samples = 64_000 if static else int(TARGET_SR * chunk_ms / 1000)
+        dummy = torch.zeros(1 if static else batch_size, warmup_samples, device=device)
         with torch.no_grad():
             for _ in range(2):
                 model.predict(dummy)
         torch.cuda.synchronize(device)
         print("Warmup done.", flush=True)
 
-    # Cross-utterance chunk buffer: accumulate until we have a full batch
-    chunk_buffer: list[torch.Tensor] = []
-    owner_buffer: list[str] = []  # which utt_id each buffered chunk belongs to
-
     total = len(loader.dataset)
-    with torch.no_grad():
-        with tqdm(total=total, unit="utt") as pbar:
-            for batch in loader:
-                utt_id, chunks_tensor = batch[0]
 
-                if chunks_tensor is None:
-                    skipped_ids.append(utt_id)
-                    tqdm.write(f"[SKIPPED] {utt_id}")
+    if static:
+        # ── Static path: one utterance at a time, full audio, variable length ──
+        with torch.no_grad():
+            with tqdm(total=total, unit="utt") as pbar:
+                for batch in loader:
+                    utt_id, audio = batch[0]
+
+                    if audio is None:
+                        skipped_ids.append(utt_id)
+                        tqdm.write(f"[SKIPPED] {utt_id}")
+                        pbar.update(1)
+                        continue
+
+                    audio_duration_s = audio.shape[0] / TARGET_SR
+                    inp = audio.unsqueeze(0).to(device)  # (1, full_samples)
+
+                    t0 = time.perf_counter()
+                    scores = model.predict(inp)
+                    elapsed = time.perf_counter() - t0
+
+                    all_rtf.append(elapsed / audio_duration_s)
+                    all_scores[utt_id] = float(scores[0].cpu())
                     pbar.update(1)
-                    continue
 
-                for chunk in chunks_tensor:
-                    chunk_buffer.append(chunk)
-                    owner_buffer.append(utt_id)
+    else:
+        # ── Chunked path: cross-utterance batching, mean pooling ──────────────
+        chunk_duration_s = chunk_ms / 1000.0
+        chunk_scores: dict[str, list[float]] = defaultdict(list)
+        chunk_buffer: list[torch.Tensor] = []
+        owner_buffer: list[str] = []
 
-                    if len(chunk_buffer) == batch_size:
-                        _flush(
-                            model,
-                            device,
-                            chunk_buffer,
-                            owner_buffer,
-                            chunk_scores,
-                            all_rtf,
-                        )
+        with torch.no_grad():
+            with tqdm(total=total, unit="utt") as pbar:
+                for batch in loader:
+                    utt_id, chunks_tensor = batch[0]
 
-                pbar.update(1)
+                    if chunks_tensor is None:
+                        skipped_ids.append(utt_id)
+                        tqdm.write(f"[SKIPPED] {utt_id}")
+                        pbar.update(1)
+                        continue
 
-            # Flush any remaining chunks that didn't fill a complete batch
-            _flush(model, device, chunk_buffer, owner_buffer, chunk_scores, all_rtf)
+                    for chunk in chunks_tensor:
+                        chunk_buffer.append(chunk)
+                        owner_buffer.append(utt_id)
 
-    all_scores = {
-        utt_id: float(np.mean(scores)) for utt_id, scores in chunk_scores.items()
-    }
+                        if len(chunk_buffer) == batch_size:
+                            _flush(model, device, chunk_buffer, owner_buffer,
+                                   chunk_scores, all_rtf, chunk_duration_s)
+
+                    pbar.update(1)
+
+                _flush(model, device, chunk_buffer, owner_buffer,
+                       chunk_scores, all_rtf, chunk_duration_s)
+
+        all_scores = {
+            utt_id: float(np.mean(scores)) for utt_id, scores in chunk_scores.items()
+        }
+
     return all_scores, all_rtf, skipped_ids

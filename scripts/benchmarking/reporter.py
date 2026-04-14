@@ -20,17 +20,22 @@ def print_results(
     param_count: int,
     vram_load_gb: float,
     vram_peak_gb: float,
+    chunk_ms: int = 500,
+    static: bool = False,
 ) -> None:
+    rtf_label = "per utterance (full audio)" if static else f"per {chunk_ms}ms chunk"
+    latency_target_ms = chunk_ms * 0.1  # RTF < 0.1 → latency < 10% of chunk duration
+
     print(f"\nScored:  {scored_count} utterances")
     print(f"Skipped: {skipped_count} utterances")
 
-    print(f"\nRTF (per 500ms chunk, no VAD):")
+    print(f"\nRTF ({rtf_label}):")
     print(f"  Mean:   {rtf['rtf_mean']:.4f}  (target < 0.1)")
     print(f"  Median: {rtf['rtf_median']:.4f}")
     print(f"  p95:    {rtf['rtf_p95']:.4f}")
     print(f"  Max:    {rtf['rtf_max']:.4f}")
-    print(f"\nInference latency per 500ms chunk:")
-    print(f"  Mean:   {rtf['latency_mean_ms']:.1f} ms  (target < 50ms)")
+    print(f"\nInference latency ({rtf_label}):")
+    print(f"  Mean:   {rtf['latency_mean_ms']:.1f} ms" + (f"  (target < {latency_target_ms:.0f}ms)" if not static else ""))
     print(f"  Median: {rtf['latency_median_ms']:.1f} ms")
     print(f"  p95:    {rtf['latency_p95_ms']:.1f} ms")
 
@@ -83,6 +88,8 @@ def write_summary(
     vram_peak_gb: float,
     detection: dict,
     rtf: dict,
+    chunk_ms: int = 500,
+    static: bool = False,
 ) -> str:
     path = os.path.join(out_dir, "summary.txt")
     with open(path, "w") as f:
@@ -110,7 +117,8 @@ def write_summary(
             f.write(f"\n--- Per-Condition EER ---\n")
             for cond, ceer in sorted(detection["condition_eers"].items()):
                 f.write(f"  {cond}: {ceer:.2f}%\n")
-        f.write(f"\n--- Real-Time Performance (no VAD, per 500ms chunk) ---\n")
+        rtf_label = "per utterance (full audio)" if static else f"per {chunk_ms}ms chunk"
+        f.write(f"\n--- Real-Time Performance ({rtf_label}) ---\n")
         f.write(f"RTF mean:         {rtf['rtf_mean']:.4f}\n")
         f.write(f"RTF median:       {rtf['rtf_median']:.4f}\n")
         f.write(f"RTF p95:          {rtf['rtf_p95']:.4f}\n")
@@ -125,6 +133,8 @@ _CSV_HEADER = [
     "model",
     "dataset",
     "phase",
+    "mode",
+    "chunk_ms",
     "scored_utterances",
     "skipped_utterances",
     "parameters",
@@ -161,6 +171,8 @@ def append_to_csv(
     vram_peak_gb: float,
     detection: dict,
     rtf: dict,
+    chunk_ms: int = 500,
+    static: bool = False,
 ) -> str:
     csv_path = str(csv_path)
     write_header = not Path(csv_path).exists()
@@ -172,6 +184,8 @@ def append_to_csv(
         "model": model_name,
         "dataset": dataset_name,
         "phase": phase,
+        "mode": "static" if static else f"chunked_{chunk_ms}ms",
+        "chunk_ms": "" if static else chunk_ms,
         "scored_utterances": scored_count,
         "skipped_utterances": skipped_count,
         "parameters": param_count,

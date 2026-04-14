@@ -57,21 +57,21 @@ def _vad_filter(audio: np.ndarray, sr: int, vad_mode: int) -> np.ndarray:
 # ── Chunking ──────────────────────────────────────────────────────────────────
 
 
-def _chunk_audio(audio: np.ndarray, hop_samples: int) -> list[np.ndarray]:
+def _chunk_audio(
+    audio: np.ndarray, hop_samples: int, chunk_samples: int
+) -> list[np.ndarray]:
     """
-    Split audio into CHUNK_SAMPLES-sized windows advancing by hop_samples.
-    The final chunk is zero-padded if shorter than CHUNK_SAMPLES.
+    Split audio into chunk_samples-sized windows advancing by hop_samples.
+    The final chunk is zero-padded if shorter than chunk_samples.
     """
     if len(audio) == 0:
         return []
 
     chunks = []
-
-    # Full windows
-    for start in range(0, max(len(audio) - CHUNK_SAMPLES + 1, 1), hop_samples):
-        chunk = audio[start : start + CHUNK_SAMPLES]
-        if len(chunk) < CHUNK_SAMPLES:
-            chunk = np.pad(chunk, (0, CHUNK_SAMPLES - len(chunk)))
+    for start in range(0, max(len(audio) - chunk_samples + 1, 1), hop_samples):
+        chunk = audio[start : start + chunk_samples]
+        if len(chunk) < chunk_samples:
+            chunk = np.pad(chunk, (0, chunk_samples - len(chunk)))
         chunks.append(chunk)
 
     return chunks
@@ -80,11 +80,55 @@ def _chunk_audio(audio: np.ndarray, hop_samples: int) -> list[np.ndarray]:
 # ── Worker function ───────────────────────────────────────────────────────────
 
 
+def _load_static(
+    flac_path: str,
+    use_vad: bool,
+    vad_mode: int,
+    normalize: bool = True,
+) -> tuple[str, torch.Tensor | None]:
+    """
+    Loads the full audio file without any chunking.
+    Returns (utt_id, 1D tensor of shape (full_samples,)) or (utt_id, None) on failure.
+    """
+    utt_id = os.path.splitext(os.path.basename(flac_path))[0]
+    try:
+        try:
+            audio, sr = sf.read(flac_path, dtype="float32", always_2d=False)
+            if audio.ndim > 1:
+                audio = audio.mean(axis=1)
+        except Exception:
+            import librosa
+            audio, sr = librosa.load(flac_path, sr=None, mono=True)
+
+        if sr != TARGET_SR:
+            import scipy.signal as sps
+            audio = sps.resample(audio, int(len(audio) * TARGET_SR / sr)).astype(np.float32)
+
+        if len(audio) == 0:
+            return utt_id, None
+
+        if normalize:
+            max_val = np.max(np.abs(audio))
+            if max_val > 0:
+                audio = audio / max_val
+
+        if use_vad:
+            audio = _vad_filter(audio, TARGET_SR, vad_mode)
+            if len(audio) == 0:
+                return utt_id, None
+
+        return utt_id, torch.from_numpy(audio)
+    except Exception as e:
+        print(f"[WORKER ERROR] {utt_id}: {type(e).__name__}: {e}", flush=True)
+        return utt_id, None
+
+
 def _load_and_chunk(
     flac_path: str,
     use_vad: bool,
     vad_mode: int,
     hop_samples: int,
+    chunk_samples: int,
     normalize: bool = True,
 ) -> tuple[str, torch.Tensor | None]:
     """
@@ -127,8 +171,8 @@ def _load_and_chunk(
             if len(audio) == 0:
                 return utt_id, None
 
-        # Chunk with sliding window (hop_samples == CHUNK_SAMPLES = no overlap)
-        chunks = _chunk_audio(audio, hop_samples)
+        # Chunk with sliding window (hop_samples == chunk_samples = no overlap)
+        chunks = _chunk_audio(audio, hop_samples, chunk_samples)
         if not chunks:
             return utt_id, None
 
@@ -150,23 +194,35 @@ class UtteranceDataset(Dataset):
         use_vad: bool = False,
         vad_mode: int = 2,
         hop_samples: int = CHUNK_SAMPLES,
+        chunk_samples: int = CHUNK_SAMPLES,
         normalize: bool = True,
+        static: bool = False,
     ):
         self.paths = flac_paths
         self.use_vad = use_vad
         self.vad_mode = vad_mode
         self.hop_samples = hop_samples
+        self.chunk_samples = chunk_samples
         self.normalize = normalize
+        self.static = static
 
     def __len__(self) -> int:
         return len(self.paths)
 
     def __getitem__(self, idx: int):
+        if self.static:
+            return _load_static(
+                self.paths[idx],
+                self.use_vad,
+                self.vad_mode,
+                self.normalize,
+            )
         return _load_and_chunk(
             self.paths[idx],
             self.use_vad,
             self.vad_mode,
             self.hop_samples,
+            self.chunk_samples,
             self.normalize,
         )
 
@@ -182,12 +238,14 @@ def build_loader(
     use_vad: bool = False,
     vad_mode: int = 2,
     overlap_pct: int = 0,
+    chunk_samples: int = CHUNK_SAMPLES,
     normalize: bool = True,
+    static: bool = False,
 ) -> DataLoader:
-    hop_samples = max(1, int(CHUNK_SAMPLES * (1 - overlap_pct / 100)))
+    hop_samples = max(1, int(chunk_samples * (1 - overlap_pct / 100)))
 
     return DataLoader(
-        UtteranceDataset(flac_paths, use_vad, vad_mode, hop_samples, normalize),
+        UtteranceDataset(flac_paths, use_vad, vad_mode, hop_samples, chunk_samples, normalize, static),
         batch_size=1,
         num_workers=num_workers,
         collate_fn=_collate,

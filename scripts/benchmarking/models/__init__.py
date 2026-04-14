@@ -10,10 +10,12 @@ The CLI --model flag matches against REGISTRY keys.
 
 from .filterpass_sap import FilterpassSAP
 from .filterpass_sap_v2 import FilterpassSAPv2
+from .ssl_anti_spoofing import SSLAntiSpoofing
 from .xlsr_mamba import XLSRMamba
 
 REGISTRY: dict[str, type] = {
     "xlsr-mamba": XLSRMamba,
     "filterpass-sap": FilterpassSAP,
     "filterpass-sap-v2": FilterpassSAPv2,
+    "ssl-anti-spoofing": SSLAntiSpoofing,
 }

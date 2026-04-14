@@ -16,7 +16,6 @@ from sklearn.metrics import (
 )
 
 from .base.dataset_base import Trial
-from .config import CHUNK_DURATION_S
 from .eval_metrics import compute_eer
 
 # ── Detection metrics ──────────────────────────────────────────────────────────
@@ -83,14 +82,15 @@ def compute_detection_metrics(
 # ── RTF / latency metrics ──────────────────────────────────────────────────────
 
 
-def compute_rtf_stats(rtf_values: list[float]) -> dict:
+def compute_rtf_stats(rtf_values: list[float], chunk_ms: int = 500) -> dict:
     arr = np.array(rtf_values)
+    chunk_duration_s = chunk_ms / 1000.0
     return {
         "rtf_mean": float(arr.mean()),
         "rtf_median": float(np.median(arr)),
         "rtf_p95": float(np.percentile(arr, 95)),
         "rtf_max": float(arr.max()),
-        "latency_mean_ms": float(arr.mean() * CHUNK_DURATION_S * 1000),
-        "latency_median_ms": float(np.median(arr) * CHUNK_DURATION_S * 1000),
-        "latency_p95_ms": float(np.percentile(arr, 95) * CHUNK_DURATION_S * 1000),
+        "latency_mean_ms": float(arr.mean() * chunk_duration_s * 1000),
+        "latency_median_ms": float(np.median(arr) * chunk_duration_s * 1000),
+        "latency_p95_ms": float(np.percentile(arr, 95) * chunk_duration_s * 1000),
     }
