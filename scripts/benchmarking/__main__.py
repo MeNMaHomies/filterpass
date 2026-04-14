@@ -184,6 +184,20 @@ def _build_model(args):
             sys.exit(1)
         kwargs["weights_path"] = _abs(args.weights_path)
         kwargs["xlsr_dir"] = _abs(args.xlsr_dir) if args.xlsr_dir else FILTERPASS_DIR
+    elif args.model == "tcm":
+        kwargs["repo_path"] = args.repo_path or os.path.normpath(
+            os.path.join(FILTERPASS_DIR, "..", "tcm_add")
+        )
+        if not args.weights_path:
+            import sys
+            print("ERROR: --weights_path required for tcm", file=sys.stderr)
+            sys.exit(1)
+        kwargs["weights_path"] = _abs(args.weights_path)
+        kwargs["xlsr_dir"] = _abs(args.xlsr_dir) if args.xlsr_dir else FILTERPASS_DIR
+        kwargs["emb_size"] = args.emb_size
+        # only pass num_encoders if explicitly set — avoids inheriting xlsr-mamba default of 12
+        if args.num_encoders != 12:
+            kwargs["num_encoders"] = args.num_encoders
     elif args.repo_path:
         kwargs["repo_path"] = args.repo_path
 
