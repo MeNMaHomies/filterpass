@@ -1,0 +1,34 @@
+Model:            Wav2Vec2-AASIST (Tak et al. 2022)
+Dataset:          ASVspoof 2021 LA (phase=eval)
+Scored:           148176 utterances
+Skipped:          0 utterances
+
+--- Model ---
+Parameters:       317,837,834
+VRAM (load):      2.37 GB
+VRAM (peak):      2.37 GB
+
+--- Anti-Spoofing ---
+EER:              5.81%
+min-tDCF:         0.3098
+AUC-ROC:          0.9854
+FAR (@ EER thr):  5.81%
+FRR (@ EER thr):  5.80%
+
+--- Classification (@ EER threshold) ---
+Accuracy:         94.19%
+Precision:        0.6431
+Recall:           0.9420
+F1:               0.7643
+
+--- Per-Condition EER ---
+  notrim: 5.81%
+
+--- Real-Time Performance (per 500ms chunk) ---
+RTF mean:         0.0037
+RTF median:       0.0031
+RTF p95:          0.0077
+RTF max:          0.0419
+Latency mean:     1.9 ms
+Latency median:   1.6 ms
+Latency p95:      3.9 ms
