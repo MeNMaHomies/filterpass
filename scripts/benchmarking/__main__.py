@@ -84,6 +84,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--phase", default="eval")
     p.add_argument("--batch_size", type=int, default=32)
     p.add_argument("--num_workers", type=int, default=8)
+    p.add_argument(
+        "--chunk_ms",
+        type=int,
+        default=500,
+        help="Chunk duration in milliseconds (default: 500ms = 8000 samples at 16kHz)",
+    )
+    p.add_argument(
+        "--static",
+        action="store_true",
+        help="Static mode: evaluate on full utterances with no chunking (overrides --chunk_ms)",
+    )
 
     # Model repo path (for models that require an external code checkout)
     p.add_argument(
@@ -95,6 +106,18 @@ def build_parser() -> argparse.ArgumentParser:
     # XLSR-Mamba specific — ignored by other adapters
     p.add_argument("--emb_size", type=int, default=144)
     p.add_argument("--num_encoders", type=int, default=12)
+
+    # SSL-Anti-Spoofing specific — ignored by other adapters
+    p.add_argument(
+        "--weights_path",
+        default=None,
+        help="Path to fine-tuned checkpoint (.pth / .pt) for ssl-anti-spoofing",
+    )
+    p.add_argument(
+        "--xlsr_dir",
+        default=None,
+        help="Directory containing xlsr2_300m.pt (defaults to --repo_path)",
+    )
 
     # VAD parameters — ignored by other adapters
     p.add_argument(
@@ -131,6 +154,17 @@ def _build_model(args):
         )
         kwargs["emb_size"] = args.emb_size
         kwargs["num_encoders"] = args.num_encoders
+    elif args.model == "ssl-anti-spoofing":
+        kwargs["repo_path"] = args.repo_path or os.path.normpath(
+            os.path.join(FILTERPASS_DIR, "..", "SSL_Anti-spoofing")
+        )
+        if not args.weights_path:
+            import sys
+            print("ERROR: --weights_path required for ssl-anti-spoofing", file=sys.stderr)
+            sys.exit(1)
+        kwargs["weights_path"] = _abs(args.weights_path)
+        if args.xlsr_dir:
+            kwargs["xlsr_dir"] = _abs(args.xlsr_dir)
     elif args.repo_path:
         kwargs["repo_path"] = args.repo_path
 
@@ -157,6 +191,8 @@ def main() -> None:
         phase=args.phase,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
+        static=args.static,
+        chunk_ms=args.chunk_ms,
         vad=args.use_vad,
         vad_mode=args.vad_mode,
         overlap_pct=args.overlap,
@@ -193,6 +229,10 @@ def main() -> None:
         f"({cfg.num_workers} loader workers, batch_size={cfg.batch_size})..."
     )
 
+    if cfg.static:
+        print("Mode: static (full utterance, no chunking)")
+    else:
+        print(f"Mode: chunked ({cfg.chunk_ms}ms, {cfg.chunk_samples} samples per chunk)")
     if cfg.vad:
         print(f"VAD enabled (mode={cfg.vad_mode}, overlap={cfg.overlap_pct}%)")
 
@@ -202,10 +242,12 @@ def main() -> None:
         use_vad=cfg.vad,
         vad_mode=cfg.vad_mode,
         overlap_pct=cfg.overlap_pct,
+        chunk_samples=cfg.chunk_samples,
         normalize=model.normalize_input,
+        static=cfg.static,
     )
     all_scores, all_rtf, skipped_ids = run_inference(
-        model, loader, device, cfg.batch_size
+        model, loader, device, cfg.batch_size, cfg.chunk_ms, cfg.static
     )
 
     vram_peak_gb = (
@@ -221,7 +263,7 @@ def main() -> None:
     # ── Metrics ───────────────────────────────────────────────────────────────
     detection = compute_detection_metrics(all_scores, trials)
     detection.update(dataset.extra_metrics(all_scores, trials, cfg.phase))
-    rtf_stats = compute_rtf_stats(all_rtf)
+    rtf_stats = compute_rtf_stats(all_rtf, cfg.chunk_ms)
 
     # ── Report ────────────────────────────────────────────────────────────────
     reporter.print_results(
@@ -232,6 +274,8 @@ def main() -> None:
         param_count,
         vram_load_gb,
         vram_peak_gb,
+        cfg.chunk_ms,
+        cfg.static,
     )
     reporter.write_scores(out_dir, all_scores)
     reporter.write_skipped(out_dir, skipped_ids)
@@ -247,6 +291,8 @@ def main() -> None:
         vram_peak_gb,
         detection,
         rtf_stats,
+        cfg.chunk_ms,
+        cfg.static,
     )
 
     csv_path = os.path.join(
@@ -264,6 +310,8 @@ def main() -> None:
         vram_peak_gb,
         detection,
         rtf_stats,
+        cfg.chunk_ms,
+        cfg.static,
     )
 
     print(f"\nResults saved to {out_dir}/")

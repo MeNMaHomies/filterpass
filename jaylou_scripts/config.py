@@ -1,6 +1,6 @@
 import torch
 
-from duy_scripts.classifiers import SAPClassifier
+from .model import SAPClassifier
 
 SEED = 42
 
@@ -10,6 +10,8 @@ CONFIG = {
     "checkpoint_dir": "./checkpoints",
     "checkpoint_name": "best_model_SAP.pt",
     "model": SAPClassifier,
+    "model_name": "facebook/wav2vec2-base",
+    "model_revision": None,  # Set to a commit hash for absolute reproducibility
     # Training
     "batch_size": 16,
     "max_epochs": 25,

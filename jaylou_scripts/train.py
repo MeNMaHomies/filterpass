@@ -85,7 +85,10 @@ def _freeze_encoder_layers(model: nn.Module, n_layers: int) -> None:
 def build_model_and_optimiser(
     train_loader: DataLoader,
 ) -> tuple[nn.Module, torch.optim.Optimizer, object, nn.Module, torch.cuda.amp.GradScaler]:
-    model = CONFIG["model"]().to(DEVICE)
+    model = CONFIG["model"](
+        model_name=CONFIG["model_name"],
+        revision=CONFIG["model_revision"]
+    ).to(DEVICE)
     _freeze_encoder_layers(model, CONFIG["freeze_encoder_layers"])
 
     if CONFIG["gradient_checkpointing"]:
