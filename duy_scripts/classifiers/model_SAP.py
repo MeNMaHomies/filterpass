@@ -2,59 +2,59 @@ import torch
 import torch.nn as nn
 from transformers import Wav2Vec2Model
 
-class SelfAttentionPooling(nn.Module):
-    def __init__(self, input_dim=768):
-        """
-        Standard Self-Attentive Pooling (SAP).
+import torch
+import torch.nn as nn
+from transformers import Wav2Vec2Model
 
-        Learns a scalar attention score for each time step, then uses
-        a weighted sum to produce one utterance-level embedding.
+
+class SelfAttentionPooling(nn.Module):
+    def __init__(self, input_dim=768, num_heads=8, dropout=0.1):
+        """
+        Self-Attention Pooling using a learnable query (CLS-style token).
+
+        The model learns to attend over the sequence and extract
+        a single aggregated representation.
         """
         super().__init__()
-        self.attention = nn.Sequential(
-            nn.Linear(input_dim, input_dim),
-            nn.Tanh(),
-            nn.Linear(input_dim, 1)
+
+        self.query = nn.Parameter(torch.randn(1, 1, input_dim))
+
+        self.attention = nn.MultiheadAttention(
+            embed_dim=input_dim,
+            num_heads=num_heads,
+            dropout=dropout,
+            batch_first=True
         )
 
-    def forward(self, x, attention_mask=None):
+        self.norm = nn.LayerNorm(input_dim)
+
+    def forward(self, x):
         """
         Args:
-            x: Tensor of shape (B, T, D)
-            attention_mask: Optional tensor of shape (B, T)
-                            1 = valid, 0 = padding
+            x: (B, T, D)
 
         Returns:
-            Tensor of shape (B, D)
+            pooled: (B, D)
         """
-        # Compute attention scores for each frame
-        scores = self.attention(x).squeeze(-1)  # (B, T)
+        B = x.size(0)
 
-        # Mask padded positions if attention_mask is provided
-        if attention_mask is not None:
-            scores = scores.masked_fill(attention_mask == 0, float("-inf"))
+        # Expand learnable query to batch size
+        query = self.query.expand(B, -1, -1)  # (B, 1, D)
 
-        # Convert scores into attention weights
-        weights = torch.softmax(scores, dim=1)  # (B, T)
+        # Query attends to the full sequence
+        attn_out, _ = self.attention(query, x, x)  # (B, 1, D)
 
-        # Weighted sum of frame-level features
-        pooled = torch.sum(x * weights.unsqueeze(-1), dim=1)  # (B, D)
+        pooled = attn_out.squeeze(1)  # (B, D)
+        pooled = self.norm(pooled)
 
         return pooled
 
 
 class SAPClassifier(nn.Module):
     def __init__(self, model_name="facebook/wav2vec2-base", freeze_extractor=True):
-        """
-        Wav2Vec2 + Self-Attentive Pooling + classifier head.
-
-        Args:
-            model_name (str): Hugging Face model name
-            freeze_extractor (bool): If True, freezes only the CNN feature extractor
-        """
         super().__init__()
 
-        print("Initialising SAP Classifier")
+        print("Initialising Self-Attention Pooling Classifier")
 
         self.encoder = Wav2Vec2Model.from_pretrained(model_name)
 
@@ -62,7 +62,11 @@ class SAPClassifier(nn.Module):
             for param in self.encoder.feature_extractor.parameters():
                 param.requires_grad = False
 
-        self.attention_pooling = SelfAttentionPooling(input_dim=768)
+        self.pooling = SelfAttentionPooling(
+            input_dim=768,
+            num_heads=8,
+            dropout=0.1
+        )
 
         self.classifier = nn.Sequential(
             nn.Linear(768, 256),
@@ -72,22 +76,12 @@ class SAPClassifier(nn.Module):
         )
 
     def forward(self, input_values, attention_mask=None):
-        """
-        Args:
-            input_values: Raw waveform tensor, shape (B, SeqLen)
-            attention_mask: Optional padding mask, shape (B, SeqLen)
-
-        Returns:
-            Logits of shape (B, 2)
-        """
         outputs = self.encoder(input_values, attention_mask=attention_mask)
         hidden = outputs.last_hidden_state  # (B, T, 768)
 
-        # If needed, you may pass a reduced mask aligned with hidden length.
-        # For now, SAP can also run without mask.
-        pooled = self.attention_pooling(hidden)  # (B, 768)
+        pooled = self.pooling(hidden)       # (B, 768)
+        logits = self.classifier(pooled)    # (B, 2)
 
-        logits = self.classifier(pooled)  # (B, 2)
         return logits
 
 # class MSAP(nn.Module):
