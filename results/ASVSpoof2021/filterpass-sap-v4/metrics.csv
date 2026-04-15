@@ -1,0 +1,2 @@
+model,dataset,phase,scored_utterances,skipped_utterances,parameters,vram_load_gb,vram_peak_gb,eer_pct,min_tdcf,auc_roc,far_at_eer_pct,frr_at_eer_pct,accuracy_pct,precision,recall,f1,rtf_mean,rtf_median,rtf_p95,rtf_max,latency_mean_ms,latency_median_ms,latency_p95_ms
+Filterpass-SAP v4,ASVspoof 2021 LA,eval,148176,0,96932994,0.36,2.34,10.10,0.3401,0.9489,10.10,10.09,89.90,0.5710,0.8990,0.6250,0.0041,0.0038,0.0071,0.0231,2.1,1.9,3.5

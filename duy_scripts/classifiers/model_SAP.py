@@ -19,9 +19,9 @@ class MultiHeadAttentionPooling(nn.Module):
 
     def forward(self, x):
         # Use mean of sequence as query to attend over all frames
-        query = x.mean(dim=1, keepdim=True)         # (B, 1, 768)
-        attn_out, _ = self.attention(query, x, x)   # (B, 1, 768)
-        attn_out = self.norm(attn_out.squeeze(1))    # (B, 768)
+        query = x.mean(dim=1, keepdim=True)  # (B, 1, 768)
+        attn_out, _ = self.attention(query, x, x)  # (B, 1, 768)
+        attn_out = self.norm(attn_out.squeeze(1))  # (B, 768)
         return attn_out
 
 
@@ -70,7 +70,7 @@ class SAPClassifier(nn.Module):
             torch.Tensor: Logits of shape (Batch, 2)
         """
         outputs = self.encoder(input_values, attention_mask=attention_mask)
-        hidden = outputs.last_hidden_state          # (B, T, 768)
-        pooled = self.attention_pooling(hidden)     # (B, 768)
-        logits = self.classifier(pooled)            # (B, 2)
+        hidden = outputs.last_hidden_state  # (B, T, 768)
+        pooled = self.attention_pooling(hidden)  # (B, 768)
+        logits = self.classifier(pooled)  # (B, 2)
         return logits

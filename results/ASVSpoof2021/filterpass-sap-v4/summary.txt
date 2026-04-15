@@ -9,26 +9,26 @@ VRAM (load):      0.36 GB
 VRAM (peak):      2.34 GB
 
 --- Anti-Spoofing ---
-EER:              14.70%
-min-tDCF:         0.4369
-AUC-ROC:          0.8922
-FAR (@ EER thr):  14.70%
-FRR (@ EER thr):  14.69%
+EER:              10.10%
+min-tDCF:         0.3401
+AUC-ROC:          0.9489
+FAR (@ EER thr):  10.10%
+FRR (@ EER thr):  10.09%
 
 --- Classification (@ EER threshold) ---
-Accuracy:         85.30%
-Precision:        0.3920
-Recall:           0.8531
-F1:               0.5372
+Accuracy:         89.90%
+Precision:        0.5710
+Recall:           0.8990
+F1:               0.6250
 
 --- Per-Condition EER ---
-  notrim: 14.70%
+  notrim: 10.10%
 
 --- Real-Time Performance (no VAD, per 500ms chunk) ---
-RTF mean:         0.0002
-RTF median:       0.0001
-RTF p95:          0.0003
-RTF max:          0.0037
-Latency mean:     0.6 ms
-Latency median:   0.5 ms
-Latency p95:      1.3 ms
+RTF mean:         0.0041
+RTF median:       0.0038
+RTF p95:          0.0071
+RTF max:          0.0231
+Latency mean:     2.1 ms
+Latency median:   1.9 ms
+Latency p95:      3.5 ms
