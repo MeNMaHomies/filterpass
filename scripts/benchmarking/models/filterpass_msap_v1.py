@@ -13,15 +13,15 @@ import torch
 
 from ..base.model_base import BenchmarkModel
 
-# _HF_REPO = "Menmahomies/SAP_Classifier"
-# _HF_FILE = "best_model_SAP_v3.pt"
+_HF_REPO = "Menmahomies/SAP_Classifier"
+_HF_FILE = "best_model_MSAP_v1.pt"
 
 # Index 0 = bonafide, index 1 = spoof — verify against training label convention
 _BONAFIDE_IDX = 0
 
 
 # ── Adapter ───────────────────────────────────────────────────────────────────
-class FilterpassMSAPv1(BenchmarkModel):
+class FilterpassMSAP(BenchmarkModel):
     def __init__(
         self, model_name: str = "facebook/wav2vec2-base", freeze_extractor: bool = True
     ):
@@ -31,17 +31,19 @@ class FilterpassMSAPv1(BenchmarkModel):
 
     @property
     def name(self) -> str:
-        return "Filterpass-MSAP (Wav2Vec2-base + Multi-Head Self-Attention Pooling) v1.0"
+        return "Filterpass-SAP (Wav2Vec2-base + Self-Attention Pooling)"
 
     def load(self, device: torch.device) -> None:
+        from huggingface_hub import hf_hub_download  # noqa: PLC0415
+
         from duy_scripts.classifiers.model_SAP import SAPClassifier  # noqa: PLC0415
 
-        weights_path = "./duy_scripts/checkpoints/best_model_MSAP_v1.pt"
-        print(f"Loading weights from {weights_path}")
+        print("Locating weights from Hugging Face...")
+        weights_path = hf_hub_download(repo_id=_HF_REPO, filename=_HF_FILE)
+        print(f"Weights at: {weights_path}")
 
         model = SAPClassifier(self._model_name, self._freeze_extractor)
-        state_dict = torch.load(weights_path, map_location=device, weights_only=True)
-        model.load_state_dict(state_dict)
+        model.load_state_dict(torch.load(weights_path, map_location=device))
         model.to(device)
         model.eval()
 
@@ -54,4 +56,5 @@ class FilterpassMSAPv1(BenchmarkModel):
     def parameter_count(self) -> int:
         if self._model is None:
             return 0
+        return sum(p.numel() for p in self._model.parameters())
         return sum(p.numel() for p in self._model.parameters())

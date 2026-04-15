@@ -10,9 +10,9 @@ The CLI --model flag matches against REGISTRY keys.
 
 from __future__ import annotations
 
+from .filterpass_msap_v1 import FilterpassMSAP
 from .filterpass_sap import FilterpassSAP
 from .filterpass_sap_v2 import FilterpassSAPv2
-from .filterpass_msap_v1 import FilterpassMSAPv1
 from .nes2net import Nes2Net
 from .tcm import TCM
 from .wav2vec2_aasist import Wav2Vec2Aasist
@@ -22,7 +22,7 @@ REGISTRY: dict[str, type] = {
     "xlsr-mamba": XLSRMamba,
     "filterpass-sap": FilterpassSAP,
     "filterpass-sap-v2": FilterpassSAPv2,
-    "filterpass-msap-v1": FilterpassMSAPv1,
+    "filterpass-msap-v1": FilterpassMSAP,
     "wav2vec2-aasist": Wav2Vec2Aasist,
     "nes2net": Nes2Net,
     "tcm": TCM,

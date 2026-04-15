@@ -35,6 +35,7 @@ class FilterpassSAP(BenchmarkModel):
 
     def load(self, device: torch.device) -> None:
         from huggingface_hub import hf_hub_download  # noqa: PLC0415
+
         from duy_scripts.classifiers.model_SAP import SAPClassifier  # noqa: PLC0415
 
         print("Locating weights from Hugging Face...")
@@ -55,4 +56,5 @@ class FilterpassSAP(BenchmarkModel):
     def parameter_count(self) -> int:
         if self._model is None:
             return 0
+        return sum(p.numel() for p in self._model.parameters())
         return sum(p.numel() for p in self._model.parameters())
