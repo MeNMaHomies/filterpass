@@ -43,7 +43,7 @@ class SelfAttentionPooling(nn.Module):
         return pooled
 
 
-class SAPClassifier(nn.Module):
+class SelfAttentivePoolingClassifier(nn.Module):
     def __init__(self, model_name="facebook/wav2vec2-base", freeze_extractor=True):
         """
         Wav2Vec2 + Self-Attentive Pooling + classifier head.
