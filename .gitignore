@@ -3,7 +3,7 @@ clearml.conf
 context
 .claude
 CLAUDE.md
-data*
+dataset
 ASVspoof2021_LA_eval
 .vscode
 __pycache__
