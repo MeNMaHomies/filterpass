@@ -1,10 +1,6 @@
 import torch
 import torch.nn as nn
-from transformers import Wav2Vec2Model
-
-import torch
-import torch.nn as nn
-from transformers import Wav2Vec2Model
+from transformers import AutoModel
 
 
 class SelfAttentionPooling(nn.Module):
@@ -28,10 +24,11 @@ class SelfAttentionPooling(nn.Module):
 
         self.norm = nn.LayerNorm(input_dim)
 
-    def forward(self, x):
+    def forward(self, x, attention_mask=None):
         """
         Args:
             x: (B, T, D)
+            attention_mask: (B, T) — 1=valid frame, 0=padding. Optional.
 
         Returns:
             pooled: (B, D)
@@ -41,8 +38,12 @@ class SelfAttentionPooling(nn.Module):
         # Expand learnable query to batch size
         query = self.query.expand(B, -1, -1)  # (B, 1, D)
 
-        # Query attends to the full sequence
-        attn_out, _ = self.attention(query, x, x)  # (B, 1, D)
+        # key_padding_mask: True = positions to IGNORE
+        key_padding_mask = (attention_mask == 0) if attention_mask is not None else None
+
+        attn_out, _ = self.attention(
+            query, x, x, key_padding_mask=key_padding_mask
+        )  # (B, 1, D)
 
         pooled = attn_out.squeeze(1)  # (B, D)
         pooled = self.norm(pooled)
@@ -54,22 +55,27 @@ class SAPClassifier(nn.Module):
     def __init__(self, model_name="facebook/wav2vec2-base", freeze_extractor=True):
         super().__init__()
 
-        print("Initialising Self-Attention Pooling Classifier")
+        print(f"Initialising Self-Attention Pooling Classifier (backbone={model_name})")
 
-        self.encoder = Wav2Vec2Model.from_pretrained(model_name)
+        # AutoModel handles wav2vec2, WavLM, HuBERT etc. without code changes;
+        # all expose `feature_extractor`, `_get_feature_vector_attention_mask`,
+        # and `last_hidden_state` so the rest of this class is backbone-agnostic.
+        self.encoder = AutoModel.from_pretrained(model_name)
 
         if freeze_extractor:
             for param in self.encoder.feature_extractor.parameters():
                 param.requires_grad = False
 
+        hidden_dim = self.encoder.config.hidden_size
+
         self.pooling = SelfAttentionPooling(
-            input_dim=768,
+            input_dim=hidden_dim,
             num_heads=8,
             dropout=0.1
         )
 
         self.classifier = nn.Sequential(
-            nn.Linear(768, 256),
+            nn.Linear(hidden_dim, 256),
             nn.GELU(),
             nn.Dropout(0.4),
             nn.Linear(256, 2),
@@ -77,10 +83,18 @@ class SAPClassifier(nn.Module):
 
     def forward(self, input_values, attention_mask=None):
         outputs = self.encoder(input_values, attention_mask=attention_mask)
-        hidden = outputs.last_hidden_state  # (B, T, 768)
+        hidden = outputs.last_hidden_state  # (B, T_frames, 768)
 
-        pooled = self.pooling(hidden)       # (B, 768)
-        logits = self.classifier(pooled)    # (B, 2)
+        # attention_mask is at sample resolution; downsample to frame resolution
+        # to match `hidden`. wav2vec2 stride collapses ~320 samples per frame.
+        frame_mask = None
+        if attention_mask is not None:
+            frame_mask = self.encoder._get_feature_vector_attention_mask(
+                hidden.shape[1], attention_mask
+            )
+
+        pooled = self.pooling(hidden, frame_mask)  # (B, 768)
+        logits = self.classifier(pooled)           # (B, 2)
 
         return logits
 

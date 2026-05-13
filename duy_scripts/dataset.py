@@ -6,24 +6,29 @@ import librosa
 import soundfile as sf
 from torch.utils.data import Dataset
 import torch.nn.functional as F
+from typing import Callable, Optional
 
 # from preprocessing import _vad_filter
 
 class ASVspoof2019LADataset(Dataset):
-    def __init__(self, base_dir, split="train", max_seconds=4.0):
+    def __init__(self, base_dir, split="train", max_seconds=4.0, transform: Optional[Callable] = None):
         """
         Args:
             base_dir (str): Path to the root 'ASVspoof2019_LA' directory.
             split (str): One of 'train', 'dev', or 'eval'.
             max_seconds (float): Maximum length of audio in seconds.
+            transform: Optional augmentation callable with signature (np.ndarray, sr: int) -> np.ndarray.
+                       Applied on-the-fly to raw waveform before normalisation and crop.
+                       Pass None for dev/eval splits.
         """
         self.base_dir = base_dir
         self.split = split
         self.max_length = int(16000 * max_seconds)  # Wav2Vec2 strictly expects 16kHz
         self.is_train = (split == "train")
+        self.transform = transform
 
         split_map = {
-            "train": ("train/flac", "train/keys/ASVspoof2019.LA.cm.train.augmented.txt"),
+            "train": ("ASVspoof2019_LA_train/flac", "ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.train.trn.txt"),
             "dev":   ("ASVspoof2019_LA_dev/flac",   "ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.dev.trl.txt"),
             "eval":  ("ASVspoof2019_LA_eval/flac",  "ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.eval.trl.txt"),
         }
@@ -113,13 +118,17 @@ class ASVspoof2019LADataset(Dataset):
         if sample_rate != 16000:
             waveform_np = librosa.resample(waveform_np, orig_sr=sample_rate, target_sr=16000)
 
-        # 3. Numpy → Tensor
+        # 3. On-the-fly augmentation (train only, numpy stage — before normalisation and crop)
+        if self.transform is not None:
+            waveform_np = self.transform(waveform_np, 16000)
+
+        # 4. Numpy → Tensor
         waveform = torch.tensor(waveform_np, dtype=torch.float32)
 
-        # 4. RMS normalise
+        # 5. RMS normalise
         waveform = self._normalize(waveform)
 
-        # 5. Crop / pad + build attention mask
+        # 6. Crop / pad + build attention mask
         waveform, attention_mask = self._random_crop_or_pad(waveform)
 
         return {

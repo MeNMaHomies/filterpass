@@ -29,18 +29,23 @@ def load_single_file(file_path, max_length):
 
     waveform = torch.tensor(waveform_np, dtype=torch.float32)
 
-    # 3. Normalize [-1, 1]
-    max_val = torch.max(torch.abs(waveform))
-    if max_val > 0:
-        waveform = waveform / max_val
+    # 3. RMS normalize (matches dataset.py — more robust than peak norm)
+    eps = 1e-9
+    rms = torch.sqrt(torch.mean(waveform ** 2))
+    if rms > eps:
+        waveform = torch.clamp(waveform / (rms + eps), -1.0, 1.0)
+    else:
+        peak = torch.max(torch.abs(waveform))
+        if peak > eps:
+            waveform = waveform / peak
 
-    # 4. Pad / truncate
+    # 4. Centre crop or pad (matches dataset.py eval behaviour)
     seq_len = waveform.shape[0]
     if seq_len > max_length:
-        waveform = waveform[:max_length]
+        start = (seq_len - max_length) // 2
+        waveform = waveform[start : start + max_length]
     elif seq_len < max_length:
-        pad_amount = max_length - seq_len
-        waveform = F.pad(waveform, (0, pad_amount))
+        waveform = F.pad(waveform, (0, max_length - seq_len))
 
     return waveform
 
@@ -61,10 +66,11 @@ def predict_file(file_path, model, device, max_length):
     model.eval()
 
     waveform = load_single_file(file_path, max_length)
-    input_values = waveform.unsqueeze(0).to(device)  # (1, T)
+    input_values = waveform.unsqueeze(0).to(device)           # (1, T)
+    attention_mask = torch.ones(1, max_length, dtype=torch.long).to(device)
 
     with torch.no_grad():
-        logits = model(input_values)
+        logits = model(input_values, attention_mask=attention_mask)
         probs = torch.softmax(logits, dim=1)
 
         spoof_prob = probs[:, 1].item()
