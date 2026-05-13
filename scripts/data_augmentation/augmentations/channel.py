@@ -5,7 +5,11 @@ Simulate the signal degradation introduced by rooms, telephone codecs,
 cheap microphones, and lossy compression.
 """
 
+import os
 import random
+import shutil
+import subprocess
+import tempfile
 
 import numpy as np
 import scipy.signal as sps
@@ -136,3 +140,102 @@ class HardClip(Augmentation):
     def apply(self, audio: np.ndarray, sr: int) -> np.ndarray:
         thr = random.uniform(*self.threshold_range)
         return np.clip(audio, -thr, thr).astype(np.float32)
+
+
+def _find_ffmpeg() -> str | None:
+    """Return path to ffmpeg executable, checking PATH and the WinGet install location."""
+    found = shutil.which("ffmpeg")
+    if found:
+        return found
+    winget_path = os.path.expandvars(
+        r"%LOCALAPPDATA%\Microsoft\WinGet\Packages"
+    )
+    if os.path.isdir(winget_path):
+        for entry in os.scandir(winget_path):
+            if entry.name.startswith("Gyan.FFmpeg"):
+                candidate = os.path.join(entry.path, "bin", "ffmpeg.exe")
+                # Gyan builds nest under a version subfolder
+                if not os.path.isfile(candidate):
+                    for sub in os.scandir(entry.path):
+                        candidate = os.path.join(sub.path, "bin", "ffmpeg.exe")
+                        if os.path.isfile(candidate):
+                            return candidate
+                else:
+                    return candidate
+    return None
+
+
+class CodecRoundTrip(Augmentation):
+    """
+    Real lossy codec round-trip via the ffmpeg executable.
+
+    Simulates MP3, Opus, and AAC quantisation artefacts that CodecDistortion
+    (tanh soft-clip) cannot reproduce: bitrate quantisation, blocking, ringing,
+    and bandwidth shaping.  Falls back to μ-law companding if ffmpeg is not
+    found or the encode/decode step fails.
+    """
+
+    # (encoder_flag, extension, bitrate choices in kbps)
+    _CODECS = [
+        ("libmp3lame", "mp3",  [32, 64, 96, 128]),
+        ("libopus",    "opus", [16, 24, 32, 48]),
+        ("aac",        "aac",  [32, 48, 64]),
+    ]
+
+    def __init__(self, p: float = 0.5):
+        super().__init__(p=p)
+        self._ffmpeg: str | None = _find_ffmpeg()
+
+    def _mulaw_fallback(self, audio: np.ndarray) -> np.ndarray:
+        import torch
+        import torchaudio.functional as F
+        t = torch.from_numpy(audio)
+        encoded = F.mu_law_encoding(t, quantization_channels=256)
+        return F.mu_law_decoding(encoded, quantization_channels=256).numpy().astype(np.float32)
+
+    def apply(self, audio: np.ndarray, sr: int) -> np.ndarray:
+        if self._ffmpeg is None:
+            return self._mulaw_fallback(audio)
+
+        enc, ext, bitrates = random.choice(self._CODECS)
+        br = random.choice(bitrates)
+        raw_in = audio.astype(np.float32).tobytes()
+
+        tmp = tempfile.NamedTemporaryFile(suffix=f".{ext}", delete=False)
+        tmp.close()
+        try:
+            # Encode: raw float32 PCM → lossy format file
+            encode = subprocess.run(
+                [
+                    self._ffmpeg, "-y", "-loglevel", "error",
+                    "-f", "f32le", "-ar", str(sr), "-ac", "1", "-i", "pipe:0",
+                    "-c:a", enc, "-b:a", f"{br}k",
+                    tmp.name,
+                ],
+                input=raw_in, capture_output=True, timeout=15,
+            )
+            if encode.returncode != 0:
+                return self._mulaw_fallback(audio)
+
+            # Decode: lossy format file → raw float32 PCM
+            decode = subprocess.run(
+                [
+                    self._ffmpeg, "-y", "-loglevel", "error",
+                    "-i", tmp.name,
+                    "-f", "f32le", "-ar", str(sr), "-ac", "1", "pipe:1",
+                ],
+                capture_output=True, timeout=15,
+            )
+            if decode.returncode != 0 or not decode.stdout:
+                return self._mulaw_fallback(audio)
+
+            result = np.frombuffer(decode.stdout, dtype=np.float32).copy()
+        except Exception:
+            return self._mulaw_fallback(audio)
+        finally:
+            os.unlink(tmp.name)
+
+        n = len(audio)
+        if len(result) >= n:
+            return result[:n]
+        return np.pad(result, (0, n - len(result))).astype(np.float32)

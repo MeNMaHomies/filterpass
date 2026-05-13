@@ -10,6 +10,7 @@ from .augmentations import (
     BandpassFilter,
     BrownNoise,
     CodecDistortion,
+    CodecRoundTrip,
     HardClip,
     MicColoration,
     PacketLoss,
