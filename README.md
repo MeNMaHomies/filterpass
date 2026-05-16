@@ -41,7 +41,7 @@ legacy/                 - even older versions
 
 `scripts/benchmarking/` contains the original benchmarking pipeline - model-agnostic, dataset-agnostic CLI for running SOTA models against ASVspoof 2021 LA.
 
-> This has been extracted into its own repo: [filterpass-benchmark](../filterpass-benchmark). The copy here is kept for reference but is no longer the source of truth.
+> This has been extracted into its own repo: [filterpass-benchmark](https://github.com/MeNMaHomies/filterpass-benchmark). The copy here is kept for reference but is no longer the source of truth.
 
 ```
 scripts/benchmarking/
@@ -79,9 +79,7 @@ scripts/benchmarking/
 
 `results/` contains benchmark outputs (scores, summaries, plots) for all evaluated models including XLSR-Mamba, Wav2Vec2-AASIST, Nes2Net, TCM, and filterpass-SAP v1-v4.
 
-### Context
-
-`context/research_papers/` - reference PDFs (ASVspoof datasets, SOTA model papers).
+> **These results are outdated.** For up-to-date benchmark results, see [filterpass-benchmark](https://github.com/MeNMaHomies/filterpass-benchmark).
 
 ---
 
