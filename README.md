@@ -81,10 +81,6 @@ scripts/benchmarking/
 
 > **These results are outdated.** For up-to-date benchmark results, see [filterpass-benchmark](https://github.com/MeNMaHomies/filterpass-benchmark).
 
-### Context
-
-`context/research_papers/` - reference PDFs (ASVspoof datasets, SOTA model papers).
-
 ---
 
 ## Models on HuggingFace
