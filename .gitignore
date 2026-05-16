@@ -15,3 +15,5 @@ LA*
 checkpoints*
 *.pt
 *.pth
+docs/
+SETUP.md
