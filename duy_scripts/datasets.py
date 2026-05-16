@@ -54,6 +54,44 @@ def _rms_normalize(waveform: torch.Tensor, eps: float = 1e-9) -> torch.Tensor:
     return waveform
 
 
+def _trim_silence(
+    waveform_np: np.ndarray,
+    sr: int = 16000,
+    top_db: float = 30.0,
+    pad_ms: int = 100,
+    frame_ms: int = 20,
+    hop_ms: int = 10,
+) -> np.ndarray:
+    """
+    Energy-based leading/trailing silence trim. Keeps frames within `top_db`
+    of the peak frame RMS; re-pads `pad_ms` per side to preserve onsets.
+    Returns the input unchanged if the whole clip is below threshold.
+    """
+    if waveform_np.size == 0:
+        return waveform_np
+    frame_len = int(sr * frame_ms / 1000)
+    hop_len   = int(sr * hop_ms   / 1000)
+    if waveform_np.size < frame_len:
+        return waveform_np
+    n_frames = 1 + (waveform_np.size - frame_len) // hop_len
+    if n_frames <= 0:
+        return waveform_np
+    idx = np.arange(n_frames) * hop_len
+    frames = np.stack([waveform_np[i:i + frame_len] for i in idx])
+    rms = np.sqrt(np.mean(frames.astype(np.float64) ** 2, axis=1) + 1e-12)
+    peak = rms.max()
+    if peak <= 0:
+        return waveform_np
+    thresh = peak * (10.0 ** (-top_db / 20.0))
+    active = np.where(rms >= thresh)[0]
+    if active.size == 0:
+        return waveform_np
+    pad = int(sr * pad_ms / 1000)
+    start = max(0, int(idx[active[0]]) - pad)
+    end   = min(waveform_np.size, int(idx[active[-1]]) + frame_len + pad)
+    return waveform_np[start:end]
+
+
 def _crop_or_pad(
     waveform: torch.Tensor, max_length: int, is_train: bool
 ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -423,6 +461,10 @@ class CommonVoiceDataset(Dataset):
 
     def __getitem__(self, idx: int) -> dict:
         waveform_np = _load_audio(self.files[idx])
+        # Trim leading/trailing silence — CV clips often have several seconds
+        # of room tone before speech, which makes random crops land on silence
+        # and creates a "leading silence → bonafide" shortcut vs WaveFake.
+        waveform_np = _trim_silence(waveform_np)
         return _make_item(waveform_np, 0, self.transform, self.max_length, is_train=True)
 
 
